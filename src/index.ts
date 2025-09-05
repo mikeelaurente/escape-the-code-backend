@@ -1,8 +1,3 @@
-// import 'dotenv/config';
-// import { drizzle } from 'drizzle-orm/mysql2';
-// import { eq } from 'drizzle-orm';
-// import { usersTable } from './db/schema';
-
 import 'dotenv/config';
 import { db } from './db';
 import * as schema from './db/schema';

@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.44.5",
+    "ejs": "^3.1.10",
     "mysql2": "^3.14.4"
   }
 }

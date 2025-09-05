@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  </head>
+  <body>
+    <div id="users">
+      <span> loading... </span>
+    </div>
+
+    <form id="frmAddUser">
+      <input type="email" name="email" placeholder="Email" />
+      <input type="password" name="password" placeholder="Password" />
+      <input type="text" name="firstName" placeholder="First Name" />
+      <input type="text" name="lastName" placeholder="Last Name" />
+
+      <button id="btnAddUser" type="button">Submit</button>
+    </form>
+
+    <script>
+      setTimeout(() => {
+        (async function () {
+          const usersDiv = document.querySelector('#users');
+          const btnAddUser = document.querySelector('#btnAddUser');
+          const frmAddUser = document.querySelector('#frmAddUser');
+
+          const fetchUsers = async () => {
+            const response = await axios('http://localhost:3000/api/users');
+            let list = '<ul>';
+            response.data.forEach((element) => {
+              list += '<li> ' + element.email + '</li>';
+            });
+            list += '</ul>';
+            usersDiv.innerHTML = list;
+          };
+
+          fetchUsers();
+
+          btnAddUser.addEventListener('click', async (event) => {
+            event.stopPropagation();
+
+            const { data } = await axios.post('/api/users', frmAddUser, {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
+            await fetchUsers();
+          });
+        })();
+      }, 3000);
+    </script>
+  </body>
+</html>

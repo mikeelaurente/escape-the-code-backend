@@ -1,21 +1,35 @@
 import { Request, Response, NextFunction } from 'express';
 import { items, Item } from '../models/item';
 import { db } from '../db';
+import * as schema from '../db/schema';
 
 // Create an item
-export const createItem = (req: Request, res: Response, next: NextFunction) => {
+export const createUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
-    const { name } = req.body;
-    const newItem: Item = { id: Date.now(), name };
-    items.push(newItem);
-    res.status(201).json(newItem);
+    const email = req.body.email;
+    const password = req.body.password;
+    const firstName = req.body.firstName;
+    const lastName = req.body.lastName;
+
+    const user = await db().insert(schema.users).values({
+      email,
+      hashedPassword: password,
+      firstName,
+      lastName,
+    });
+
+    res.status(201).json(user);
   } catch (error) {
     next(error);
   }
 };
 
 // Read all items
-export const getItems = async (
+export const getUsers = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -43,7 +57,7 @@ export const getItems = async (
 };
 
 // Read single item
-export const getItemById = (
+export const getUserById = (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -62,7 +76,7 @@ export const getItemById = (
 };
 
 // Update an item
-export const updateItem = (req: Request, res: Response, next: NextFunction) => {
+export const updateUser = (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id || '', 10);
     const { name } = req.body;
@@ -79,7 +93,7 @@ export const updateItem = (req: Request, res: Response, next: NextFunction) => {
 };
 
 // Delete an item
-export const deleteItem = (req: Request, res: Response, next: NextFunction) => {
+export const deleteUser = (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id || '', 10);
     const itemIndex = items.findIndex((i) => i.id === id);
