@@ -1,12 +1,11 @@
 import { relations } from 'drizzle-orm';
-import { bigint } from 'drizzle-orm/gel-core';
 import {
   datetime,
   timestamp,
   int,
   mysqlTable,
-  serial,
   varchar,
+  json,
 } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
@@ -66,7 +65,17 @@ export const stories = mysqlTable('stories', {
   id: int('id').autoincrement().primaryKey(),
   title: varchar({ length: 255 }).notNull().unique(),
   description: varchar({ length: 2048 }).notNull(),
-  achievementValue: int().notNull(),
+  rewardOptions: json('reward_options')
+    .$type<{
+      easy: number;
+      medium: number;
+      hard: number;
+    }>()
+    .$default(() => ({
+      easy: 10,
+      medium: 20,
+      hard: 30,
+    })),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -76,7 +85,17 @@ export const chapters = mysqlTable('chapters', {
   storyId: int('story_id').references(() => stories.id),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
-  achievementValue: int().notNull(),
+  rewardOptions: json('reward_options')
+    .$type<{
+      easy: number;
+      medium: number;
+      hard: number;
+    }>()
+    .$default(() => ({
+      easy: 10,
+      medium: 20,
+      hard: 30,
+    })),
 });
 
 export const sections = mysqlTable('sections', {
@@ -84,7 +103,17 @@ export const sections = mysqlTable('sections', {
   chapterId: int('chapter_id').references(() => chapters.id),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
-  achievementValue: int().notNull(),
+  rewardOptions: json('reward_options')
+    .$type<{
+      easy: number;
+      medium: number;
+      hard: number;
+    }>()
+    .$default(() => ({
+      easy: 10,
+      medium: 20,
+      hard: 30,
+    })),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -124,8 +153,11 @@ export const challengeHints = mysqlTable('challenge_hints', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export const userRelations = relations(users, ({ many }) => ({
-  credits: many(userCredits),
+export const userRelations = relations(users, ({ one, many }) => ({
+  credits: one(userCredits, {
+    fields: [users.id],
+    references: [userCredits.userId],
+  }),
   creditUsage: many(creditUsage),
   achievements: many(userAchievements),
   storyProgress: many(storyProgress),

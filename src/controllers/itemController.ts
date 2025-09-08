@@ -2,8 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { items, Item } from '../models/item';
 import { db } from '../db';
 import * as schema from '../db/schema';
+import { eq } from 'drizzle-orm';
 
-// Create an item
+// User CRUD operations
 export const createUser = async (
   req: Request,
   res: Response,
@@ -28,7 +29,6 @@ export const createUser = async (
   }
 };
 
-// Read all items
 export const getUsers = async (
   req: Request,
   res: Response,
@@ -56,20 +56,21 @@ export const getUsers = async (
   }
 };
 
-// Read single item
-export const getUserById = (
+// Read single user
+export const getUserById = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const id = parseInt(req.params.id || '', 10);
-    const item = items.find((i) => i.id === id);
-    if (!item) {
-      res.status(404).json({ message: 'Item not found' });
+    const user = await db().query.users.findFirst({
+      where: eq(schema.users.id, parseInt(req.params.id || '', 10)),
+    });
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
       return;
     }
-    res.json(item);
+    res.json(user);
   } catch (error) {
     next(error);
   }
@@ -103,6 +104,48 @@ export const deleteUser = (req: Request, res: Response, next: NextFunction) => {
     }
     const deletedItem = items.splice(itemIndex, 1)[0];
     res.json(deletedItem);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Achievements CRUD operations
+export const createAchievements = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const title = req.body.title;
+    const description = req.body.description;
+    const rewardPoints = req.body.rewardPoints;
+
+    const achievements = await db().insert(schema.achievements).values({
+      title,
+      description,
+      rewardPoints,
+    });
+    res.status(201).json(achievements);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAchievements = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const achievements = await db().query.achievements.findMany({
+      columns: {
+        id: true,
+        title: true,
+        description: true,
+        rewardPoints: true,
+      },
+    });
+    res.json(achievements);
   } catch (error) {
     next(error);
   }
