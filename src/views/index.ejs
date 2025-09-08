@@ -5,52 +5,231 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%= title %></title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
+    />
+    <style>
+      body {
+        font-family: 'Lato', sans-serif;
+      }
+
+      /* Fixed sidenav, full height */
+      .sidenav {
+        height: 100%;
+        width: 200px;
+        position: fixed;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        background-color: #111;
+        overflow-x: hidden;
+        padding-top: 20px;
+      }
+
+      /* Style the sidenav links and the dropdown button */
+      .sidenav a,
+      .dropdown-btn {
+        padding: 6px 8px 6px 16px;
+        text-decoration: none;
+        font-size: 20px;
+        color: #818181;
+        display: block;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        outline: none;
+      }
+
+      /* On mouse-over */
+      .sidenav a:hover,
+      .dropdown-btn:hover {
+        color: #f1f1f1;
+      }
+
+      /* Main content */
+      .main {
+        margin-left: 200px; /* Same as the width of the sidenav */
+        font-size: 20px; /* Increased text to enable scrolling */
+        padding: 0px 10px;
+      }
+
+      /* Add an active class to the active dropdown button */
+      .active {
+        background-color: green;
+        color: white;
+      }
+
+      /* Dropdown container (hidden by default). Optional: add a lighter background color and some left padding to change the design of the dropdown content */
+      .dropdown-container {
+        display: none;
+        background-color: #262626;
+        padding-left: 8px;
+      }
+
+      /* Optional: Style the caret down icon */
+      .fa-caret-down {
+        float: right;
+        padding-right: 8px;
+      }
+
+      /* Some media queries for responsiveness */
+      @media screen and (max-height: 450px) {
+        .sidenav {
+          padding-top: 15px;
+        }
+        .sidenav a {
+          font-size: 18px;
+        }
+      }
+    </style>
   </head>
-  <body>
-    <div id="users">
-      <span> loading... </span>
+  <body id="app">
+    <div class="sidenav">
+      <button class="dropdown-btn">Loading...</button>
     </div>
 
-    <form id="frmAddUser">
-      <input type="email" name="email" placeholder="Email" />
-      <input type="password" name="password" placeholder="Password" />
-      <input type="text" name="firstName" placeholder="First Name" />
-      <input type="text" name="lastName" placeholder="Last Name" />
+    <div class="main">
+      <!-- <div id="users">
+        <span> loading... </span>
+      </div>
 
-      <button id="btnAddUser" type="button">Submit</button>
-    </form>
+      <form id="frmAddUser">
+        <input type="email" name="email" placeholder="Email" />
+        <input type="password" name="password" placeholder="Password" />
+        <input type="text" name="firstName" placeholder="First Name" />
+        <input type="text" name="lastName" placeholder="Last Name" />
+
+        <button id="btnAddUser" type="button">Submit</button>
+      </form> -->
+
+      <div id="section-container">
+        <h2>Welcome to Escape The Code</h2>
+        <div class="section">
+          <div class="section-content"></div>
+          <div class="section-challenge"></div>
+        </div>
+      </div>
+
+      <div id="mode"></div>
+    </div>
 
     <script>
-      setTimeout(() => {
-        (async function () {
-          const usersDiv = document.querySelector('#users');
-          const btnAddUser = document.querySelector('#btnAddUser');
-          const frmAddUser = document.querySelector('#frmAddUser');
+      (function () {
+        const EscapeTheCode = (function () {
+          const EscapeTheCode = {};
 
-          const fetchUsers = async () => {
-            const response = await axios('http://localhost:3000/api/users');
-            let list = '<ul>';
-            response.data.forEach((element) => {
-              list += '<li> ' + element.email + '</li>';
-            });
-            list += '</ul>';
-            usersDiv.innerHTML = list;
+          EscapeTheCode.container = null;
+          EscapeTheCode.sidenav = null;
+          EscapeTheCode.sectionContent = null;
+          EscapeTheCode.sectionChallenge = null;
+          EscapeTheCode.story = null;
+          EscapeTheCode.baseUrl = 'http://localhost:3000/api';
+
+          EscapeTheCode.fetchStory = async () => {
+            const response = await axios(EscapeTheCode.baseUrl + '/stories');
+            const story = response.data[0];
+            EscapeTheCode.story = story;
           };
 
-          fetchUsers();
+          EscapeTheCode.displayStory = () => {
+            let list = '';
+            EscapeTheCode.story.chapters.forEach((chapter) => {
+              sections = chapter.sections;
 
-          btnAddUser.addEventListener('click', async (event) => {
-            event.stopPropagation();
+              list += `<button class="dropdown-btn js-btn-chapter"> ${chapter.title}`;
+              list += `<i class="fa fa-caret-down"></i></button>`;
+              list += `<div class="dropdown-container">`;
 
-            const { data } = await axios.post('/api/users', frmAddUser, {
-              headers: {
-                'Content-Type': 'application/json',
-              },
+              sections.forEach((section) => {
+                list += `<a data-chapter="${chapter.id}" data-id="${section.id}" href="#">${section.title}</a>`;
+              });
+
+              list += `</div>`;
             });
-            await fetchUsers();
-          });
+
+            EscapeTheCode.sidenav.innerHTML = list;
+          };
+
+          EscapeTheCode.displaySectionContent = (section) => {
+            let html = `<h2>${section.title}</h2>`;
+            html += `<p>${section.description}</p>`;
+
+            html += `<div>${section.content}</div>`;
+
+            EscapeTheCode.sectionContent.innerHTML = html;
+          };
+
+          EscapeTheCode.bindEvents = () => {
+            EscapeTheCode.sidenav.addEventListener(
+              'click',
+              EscapeTheCode.handleSideNav,
+            );
+          };
+
+          EscapeTheCode.init = (container) => {
+            console.log('Init...');
+            EscapeTheCode.sidenav = container.querySelector('.sidenav');
+            EscapeTheCode.sectionContent =
+              container.querySelector('.section-content');
+            EscapeTheCode.sectionChallenge =
+              container.querySelector('.section-challenge');
+            EscapeTheCode.fetchStory().then(() => {
+              EscapeTheCode.displayStory();
+            });
+            EscapeTheCode.bindEvents();
+          };
+
+          EscapeTheCode.handleSideNav = (e) => {
+            console.log(e.target);
+            const target = e.target;
+            if (!target) return;
+
+            if (target.nodeName === 'BUTTON' || target.closest('button')) {
+              const toggleBtn =
+                target.nodeName === 'BUTTON'
+                  ? target
+                  : target.closest('button');
+              EscapeTheCode.handleChapter(toggleBtn);
+            }
+            if (target.nodeName === 'A') {
+              EscapeTheCode.handleSection(e);
+            }
+          };
+
+          EscapeTheCode.handleChapter = (btn) => {
+            btn.classList.toggle('active');
+            let dropdownContent = btn.nextElementSibling;
+            if (dropdownContent.style.display === 'block') {
+              dropdownContent.style.display = 'none';
+            } else {
+              dropdownContent.style.display = 'block';
+            }
+          };
+
+          EscapeTheCode.handleSection = (e) => {
+            const sectionTarget = e.target;
+            const chapterId = sectionTarget.getAttribute('data-chapter');
+            const sectionId = sectionTarget.getAttribute('data-id');
+
+            const chapter = EscapeTheCode.story.chapters.find(
+              (c) => c.id == chapterId,
+            );
+
+            const section = chapter.sections.find((s) => s.id == sectionId);
+
+            EscapeTheCode.displaySectionContent(section);
+          };
+
+          return {
+            init: EscapeTheCode.init,
+          };
         })();
-      }, 1500);
+
+        EscapeTheCode.init(document.querySelector('#app'));
+      })();
     </script>
   </body>
 </html>

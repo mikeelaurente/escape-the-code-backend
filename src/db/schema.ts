@@ -6,6 +6,7 @@ import {
   mysqlTable,
   varchar,
   json,
+  text,
 } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
@@ -103,6 +104,7 @@ export const sections = mysqlTable('sections', {
   chapterId: int('chapter_id').references(() => chapters.id),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
+  content: text('content').notNull(),
   rewardOptions: json('reward_options')
     .$type<{
       easy: number;

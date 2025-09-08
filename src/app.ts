@@ -1,5 +1,6 @@
 import express from 'express';
-import itemRoutes from './routes/itemRoutes';
+import userRoutes from './routes/userRoutes';
+import storyRoutes from './routes/storyRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 import path from 'path';
 import { Request, Response } from 'express';
@@ -13,7 +14,8 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, './views'));
 
 // Routes
-app.use('/api/users', itemRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/stories', storyRoutes);
 
 app.get('/', async (req: Request, res: Response) => {
   res.render('index', {

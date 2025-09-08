@@ -96,6 +96,10 @@ async function main() {
       ];
 
       for (const section of sections) {
+        const contentLoremIpsum = generateLoremIpsum(
+          Math.floor(Math.random() * 3) + 2,
+        );
+
         await tx.insert(schema.sections).values({
           title: section.title,
           chapterId: createdChapter?.id,
@@ -105,6 +109,11 @@ async function main() {
             medium: 30,
             hard: 50,
           },
+          content:
+            'This is the content for ' +
+            section.title +
+            '.\n\n' +
+            contentLoremIpsum,
         });
 
         const createdSection = await tx.query.sections.findFirst({
@@ -171,6 +180,20 @@ async function main() {
     }
   });
 }
+
+const generateLoremIpsum = (paragraphs: number) => {
+  const loremTexts = [
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+    'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
+    'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
+    'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
+  ];
+  let result = '';
+  for (let i = 0; i < paragraphs; i++) {
+    result += loremTexts[i % loremTexts.length] + '\n\n';
+  }
+  return result.trim();
+};
 
 main()
   .then(() => {
