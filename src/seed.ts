@@ -163,14 +163,27 @@ async function main() {
           });
 
           const challegeHints = [
-            { hintText: `This is a hint 1 for ${challenge.title}`, cost: 5 },
-            { hintText: `This is a hint 2 for ${challenge.title}`, cost: 10 },
-            { hintText: `This is a hint 3 for ${challenge.title}`, cost: 15 },
+            {
+              displayText: 'Hint 1',
+              hintText: `This is a hint 1 for ${challenge.title}`,
+              cost: 5,
+            },
+            {
+              displayText: 'Hint 2',
+              hintText: `This is a hint 2 for ${challenge.title}`,
+              cost: 10,
+            },
+            {
+              displayText: 'Hint 3',
+              hintText: `This is a hint 3 for ${challenge.title}`,
+              cost: 15,
+            },
           ];
 
           for (const hint of challegeHints) {
             await tx.insert(schema.challengeHints).values({
               challengeId: createdChallenge?.id,
+              displayText: hint.displayText,
               hintText: hint.hintText,
               cost: hint.cost,
             });

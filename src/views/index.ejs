@@ -4,11 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%= title %></title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
+      href="/libs/fontawesome-free-7.0.1-web/css/all.min.css"
     />
+    <link rel="stylesheet" href="/libs/bootstrap.min.css" />
+    <script src="/libs/axios.min.js"></script>
+    <script src="/libs/bootstrap.min.js"></script>
+    <script src="/libs/sweetalert2@11.js"></script>
     <style>
       body {
         font-family: 'Lato', sans-serif;
@@ -57,7 +60,7 @@
       }
 
       /* Add an active class to the active dropdown button */
-      .active {
+      .sidenav .active {
         background-color: green;
         color: white;
       }
@@ -105,15 +108,13 @@
         <button id="btnAddUser" type="button">Submit</button>
       </form> -->
 
-      <div id="section-container">
+      <div id="container container-md">
         <h2>Welcome to Escape The Code</h2>
         <div class="section">
           <div class="section-content"></div>
           <div class="section-challenge"></div>
         </div>
       </div>
-
-      <div id="mode"></div>
     </div>
 
     <script>
@@ -121,106 +122,349 @@
         const EscapeTheCode = (function () {
           const EscapeTheCode = {};
 
-          EscapeTheCode.container = null;
-          EscapeTheCode.sidenav = null;
-          EscapeTheCode.sectionContent = null;
-          EscapeTheCode.sectionChallenge = null;
-          EscapeTheCode.story = null;
-          EscapeTheCode.baseUrl = 'http://localhost:3000/api';
-
-          EscapeTheCode.fetchStory = async () => {
-            const response = await axios(EscapeTheCode.baseUrl + '/stories');
-            const story = response.data[0];
-            EscapeTheCode.story = story;
+          const vars = {
+            story: null,
+            challenges: [],
+            baseUrl: '<%= apiUrl %>',
+            selectedChallenge: null,
           };
 
-          EscapeTheCode.displayStory = () => {
-            let list = '';
-            EscapeTheCode.story.chapters.forEach((chapter) => {
-              sections = chapter.sections;
+          const dom = {
+            container: null,
+            sidenav: null,
+            sectionContent: null,
+            sectionChallenge: null,
+          };
 
-              list += `<button class="dropdown-btn js-btn-chapter"> ${chapter.title}`;
-              list += `<i class="fa fa-caret-down"></i></button>`;
-              list += `<div class="dropdown-container">`;
+          const ajax = {
+            fetchStory: async () => {
+              const response = await axios(vars.baseUrl + '/stories');
+              const story = response.data[0];
+              vars.story = story;
 
-              sections.forEach((section) => {
-                list += `<a data-chapter="${chapter.id}" data-id="${section.id}" href="#">${section.title}</a>`;
+              for (const chapter of story.chapters) {
+                for (const section of chapter.sections) {
+                  vars.challenges = [...vars.challenges, ...section.challenges];
+                }
+              }
+            },
+            fetchChallengeHints: async (challengeId) => {
+              const response = await axios(
+                vars.baseUrl + '/stories/challenges/' + challengeId + '/hints',
+              );
+              return response.data;
+            },
+            submitAnswer: async (challengeId, answer) => {
+              const response = await axios.post(
+                vars.baseUrl + '/stories/challenges/' + challengeId + '/answer',
+                {
+                  answer,
+                },
+              );
+              console.log(response.data);
+              return response.data;
+            },
+          };
+
+          const renderers = {
+            displayChapters: () => {
+              let list = '';
+              vars.story.chapters.forEach((chapter) => {
+                sections = chapter.sections;
+
+                list += `<button class="dropdown-btn js-btn-chapter"> ${chapter.title}`;
+                list += `<i class="fa fa-caret-down"></i></button>`;
+                list += `<div class="dropdown-container">`;
+
+                sections.forEach((section) => {
+                  list += `<a data-chapter="${chapter.id}" data-id="${section.id}" href="#">${section.title}</a>`;
+                });
+
+                list += `</div>`;
               });
 
-              list += `</div>`;
-            });
+              dom.sidenav.innerHTML = list;
+            },
 
-            EscapeTheCode.sidenav.innerHTML = list;
-          };
+            displaySectionContent: (section) => {
+              let html = `<h2>${section.title}</h2>`;
+              html += `<p>${section.description}</p>`;
 
-          EscapeTheCode.displaySectionContent = (section) => {
-            let html = `<h2>${section.title}</h2>`;
-            html += `<p>${section.description}</p>`;
+              console.log(section);
+              html += `<div>${section.content}</div>`;
+              html += `<hr />`;
 
-            html += `<div>${section.content}</div>`;
+              let challengeHTML =
+                '<select name="mode" class="form-select js-mode">';
+              challengeHTML += '<option> Please select a mode </option>';
 
-            EscapeTheCode.sectionContent.innerHTML = html;
+              section.challenges.forEach((challenge) => {
+                let mode =
+                  challenge.difficulty[0].toUpperCase() +
+                  challenge.difficulty.substring(1);
+
+                challengeHTML += `<option value="${challenge.id}"> ${mode}</option>`;
+              });
+
+              challengeHTML += '</select>';
+              html += challengeHTML;
+
+              dom.sectionContent.innerHTML = html;
+            },
+
+            displayChallenge: (challenge) => {
+              let html = `<h3>${challenge.title}</h3>`;
+              html += `<p>${challenge.description}</p>`;
+              html += `<textarea id="challenge-answer" class="form-control" rows="5"></textarea>`;
+              html += `<hr />`;
+              html += `<div id="js-challenge-result"></div>`;
+              html += `<div class="challenge-actions">
+                              <button class="btn btn-info js-show-hints ">Show Hints</button>
+                              <button class="btn btn-primary js-submit">Submit</button>
+                            </div>`;
+              dom.sectionChallenge.innerHTML = html;
+            },
+            displayChallengeResult: (result) => {
+              const resultDiv = document.getElementById('js-challenge-result');
+
+              const resultHTML = result.result;
+              const codeOutputHTML = result.codeOutput;
+              let syntaxErrorsHTML = '<ul>';
+
+              result.syntaxErrors.forEach((error) => {
+                syntaxErrorsHTML += `<li>${error.code} at line number ${error.lineNumber}, column ${error.columnNumber}</li> `;
+              });
+
+              syntaxErrorsHTML += '</ul>';
+
+              let feedbackHTML = '';
+
+              feedbackHTML += '<h3>Recommendations</h3>';
+
+              feedbackHTML += result.feedback.length
+                ? '<ul><li>' + result.feedback.join('</li><li>') + '</li></ul>'
+                : '';
+              feedbackHTML += '<h3>Feedback</h3>';
+              feedbackHTML += result.recommendations.length
+                ? '<ul><li>' +
+                  result.recommendations
+                    .map(
+                      (r) =>
+                        `<p><b>Message:</b>${r.message}</p><p><b>Reason:</b>${r.reason}</p>`,
+                    )
+                    .join('</li><li>') +
+                  '</li></ul>'
+                : '';
+
+              let html = `<div class="my-2"><ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home-tab-pane" type="button" role="tab" aria-controls="home-tab-pane" aria-selected="true">Result</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-tab-pane" type="button" role="tab" aria-controls="profile-tab-pane" aria-selected="false">Code Output</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="contact-tab" data-bs-toggle="tab" data-bs-target="#contact-tab-pane" type="button" role="tab" aria-controls="contact-tab-pane" aria-selected="false">Errors</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="feedback-tab" data-bs-toggle="tab" data-bs-target="#feedback-tab-pane" type="button" role="tab" aria-controls="contact-tab-pane" aria-selected="false">Feedback</button>
+        </li>
+      </ul>
+      <div class="tab-content" id="myTabContent">
+        <div class="tab-pane fade show active" id="home-tab-pane" role="tabpanel" aria-labelledby="home-tab" tabindex="0">${resultHTML}</div>
+        <div class="tab-pane fade" id="profile-tab-pane" role="tabpanel" aria-labelledby="profile-tab" tabindex="0">${codeOutputHTML}</div>
+        <div class="tab-pane fade" id="contact-tab-pane" role="tabpanel" aria-labelledby="contact-tab" tabindex="0">${syntaxErrorsHTML}</div>
+        <div class="tab-pane fade" id="feedback-tab-pane" role="tabpanel" aria-labelledby="feedback-tab" tabindex="0">${feedbackHTML}</div>
+      </div>
+      </div>
+                    `;
+
+              resultDiv.innerHTML = html;
+
+              /*\
+                    {
+          "codeOutput": "Test\nHello There World\ntesting is not defined function error",
+          "result": "failed",
+          "syntaxErrors": [
+              {
+                  "code": "cnsol.log(\"Test\");",
+                  "lineNumber": 1,
+                  "columnNumber": 1
+              },
+              {
+                  "code": "console.lg(\"testing\");",
+                  "lineNumber": 3,
+                  "columnNumber": 1
+              }
+          ]
+      }*/
+            },
           };
 
           EscapeTheCode.bindEvents = () => {
-            EscapeTheCode.sidenav.addEventListener(
-              'click',
-              EscapeTheCode.handleSideNav,
+            dom.sidenav.addEventListener('click', eventHanders.handleSideNav);
+            dom.sectionContent.addEventListener(
+              'change',
+              eventHanders.handleSelectChallengeMode,
             );
+            dom.sectionChallenge.addEventListener('click', (e) => {
+              console.log(e);
+              const target = e.target;
+              if (target.classList.contains('js-show-hints')) {
+                eventHanders.handleShowHints(target);
+              }
+              if (target.classList.contains('js-submit')) {
+                eventHanders.handleSubmitAnswer(target);
+              }
+            });
+          };
+
+          const eventHanders = {
+            handleSideNav: (e) => {
+              console.log(e.target);
+              const target = e.target;
+              if (!target) return;
+
+              if (target.nodeName === 'BUTTON' || target.closest('button')) {
+                const toggleBtn =
+                  target.nodeName === 'BUTTON'
+                    ? target
+                    : target.closest('button');
+                eventHanders.handleChapter(toggleBtn);
+              }
+              if (target.nodeName === 'A') {
+                eventHanders.handleSection(e);
+              }
+            },
+
+            handleChapter: (btn) => {
+              btn.classList.toggle('active');
+              let dropdownContent = btn.nextElementSibling;
+              if (dropdownContent.style.display === 'block') {
+                dropdownContent.style.display = 'none';
+              } else {
+                dropdownContent.style.display = 'block';
+              }
+            },
+
+            handleSection: (e) => {
+              const sectionTarget = e.target;
+              const chapterId = sectionTarget.getAttribute('data-chapter');
+              const sectionId = sectionTarget.getAttribute('data-id');
+
+              const chapter = vars.story.chapters.find(
+                (c) => c.id == chapterId,
+              );
+
+              const section = chapter.sections.find((s) => s.id == sectionId);
+
+              renderers.displaySectionContent(section);
+            },
+
+            handleSelectChallengeMode: (e) => {
+              const target = e.target;
+              if (target.classList.contains('js-mode')) {
+                const challengeId = target.value;
+
+                const challenge = vars.challenges.find(
+                  (c) => c.id == challengeId,
+                );
+
+                vars.selectedChallenge = challenge;
+
+                renderers.displayChallenge(challenge);
+              }
+            },
+
+            handleShowHints: async (e) => {
+              const hints = await ajax.fetchChallengeHints(
+                vars.selectedChallenge.id,
+              );
+
+              let tableHints = '<table class="table">';
+              tableHints += `<tr>
+                                    <th>Title</th>
+                                    <th>Cost</th>
+                                    <th>Action</th>
+                                  </tr>
+                    `;
+
+              hints.forEach((hint) => {
+                tableHints += `
+                                  <tr>
+                                    <td>${hint.displayText}</td>
+                                    <td>${hint.cost}</td>
+                                    <td><button class="btn btn-success js-buy-hint" data-id="${hint.id}">Buy</button></td>
+                                  </tr>`;
+              });
+              tableHints += '</table>';
+
+              Swal.fire({
+                html: tableHints,
+                icon: 'question',
+                confirmButtonText: 'Close',
+              });
+              console.log(vars.selectedChallenge);
+            },
+            handleSubmitAnswer: async (e) => {
+              Swal.fire({
+                title: 'Are you sure?',
+                showCancelButton: true,
+                confirmButtonText: 'Submit',
+                showLoaderOnConfirm: true,
+                preConfirm: async (login) => {
+                  try {
+                    //get the answer
+                    const answer = encodeURIComponent(
+                      document.getElementById('challenge-answer').value,
+                    );
+                    const challengeId = vars.selectedChallenge.id;
+                    // post answer to api
+                    const response = await ajax.submitAnswer(
+                      challengeId,
+                      answer,
+                    );
+
+                    //display response
+                    renderers.displayChallengeResult(response);
+                    return response;
+                  } catch (error) {
+                    Swal.showValidationMessage(`Request failed: ${error}`);
+                  }
+                },
+                allowOutsideClick: () => !Swal.isLoading(),
+              }).then((result, response) => {
+                console.log(result, response);
+                if (result.isConfirmed) {
+                  if (result.value.result === 'success') {
+                    Swal.fire({
+                      title: 'Yey!',
+                      text: 'Great job!',
+                      icon: 'success',
+                    });
+                  } else {
+                    Swal.fire({
+                      title: 'Ooops!',
+                      text: 'Try again.!',
+                      icon: 'error',
+                    });
+                  }
+                }
+              });
+            },
           };
 
           EscapeTheCode.init = (container) => {
             console.log('Init...');
-            EscapeTheCode.sidenav = container.querySelector('.sidenav');
-            EscapeTheCode.sectionContent =
-              container.querySelector('.section-content');
-            EscapeTheCode.sectionChallenge =
+            dom.sidenav = container.querySelector('.sidenav');
+            dom.sectionContent = container.querySelector('.section-content');
+            dom.sectionChallenge =
               container.querySelector('.section-challenge');
-            EscapeTheCode.fetchStory().then(() => {
-              EscapeTheCode.displayStory();
+            ajax.fetchStory().then(() => {
+              renderers.displayChapters();
             });
+
             EscapeTheCode.bindEvents();
-          };
-
-          EscapeTheCode.handleSideNav = (e) => {
-            console.log(e.target);
-            const target = e.target;
-            if (!target) return;
-
-            if (target.nodeName === 'BUTTON' || target.closest('button')) {
-              const toggleBtn =
-                target.nodeName === 'BUTTON'
-                  ? target
-                  : target.closest('button');
-              EscapeTheCode.handleChapter(toggleBtn);
-            }
-            if (target.nodeName === 'A') {
-              EscapeTheCode.handleSection(e);
-            }
-          };
-
-          EscapeTheCode.handleChapter = (btn) => {
-            btn.classList.toggle('active');
-            let dropdownContent = btn.nextElementSibling;
-            if (dropdownContent.style.display === 'block') {
-              dropdownContent.style.display = 'none';
-            } else {
-              dropdownContent.style.display = 'block';
-            }
-          };
-
-          EscapeTheCode.handleSection = (e) => {
-            const sectionTarget = e.target;
-            const chapterId = sectionTarget.getAttribute('data-chapter');
-            const sectionId = sectionTarget.getAttribute('data-id');
-
-            const chapter = EscapeTheCode.story.chapters.find(
-              (c) => c.id == chapterId,
-            );
-
-            const section = chapter.sections.find((s) => s.id == sectionId);
-
-            EscapeTheCode.displaySectionContent(section);
           };
 
           return {

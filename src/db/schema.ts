@@ -149,6 +149,7 @@ export const challengeAnswers = mysqlTable('challenge_answers', {
 export const challengeHints = mysqlTable('challenge_hints', {
   id: int('id').autoincrement().primaryKey(),
   challengeId: int('challenge_id').references(() => challenges.id),
+  displayText: varchar({ length: 2048 }).notNull(),
   hintText: varchar({ length: 2048 }).notNull(),
   cost: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
