@@ -12,6 +12,7 @@
     <script src="/libs/axios.min.js"></script>
     <script src="/libs/bootstrap.min.js"></script>
     <script src="/libs/sweetalert2@11.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <style>
       body {
         font-family: 'Lato', sans-serif;
@@ -78,6 +79,10 @@
         padding-right: 8px;
       }
 
+      #editor {
+        font-size: 1.1em;
+      }
+
       /* Some media queries for responsiveness */
       @media screen and (max-height: 450px) {
         .sidenav {
@@ -95,30 +100,70 @@
     </div>
 
     <div class="main">
-      <!-- <div id="users">
-        <span> loading... </span>
-      </div>
-
-      <form id="frmAddUser">
-        <input type="email" name="email" placeholder="Email" />
-        <input type="password" name="password" placeholder="Password" />
-        <input type="text" name="firstName" placeholder="First Name" />
-        <input type="text" name="lastName" placeholder="Last Name" />
-
-        <button id="btnAddUser" type="button">Submit</button>
-      </form> -->
-
       <div id="container container-md">
         <h2>Welcome to Escape The Code</h2>
         <div class="section">
-          <div class="section-content"></div>
-          <div class="section-challenge"></div>
+          <div class="accordion" id="accordionPanelsStayOpenExample">
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#panelsStayOpen-collapseOne"
+                  aria-expanded="true"
+                  aria-controls="panelsStayOpen-collapseOne"
+                >
+                  Lesson
+                </button>
+              </h2>
+              <div
+                id="panelsStayOpen-collapseOne"
+                class="accordion-collapse collapse show"
+              >
+                <div class="accordion-body">
+                  <div class="section-content"></div>
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button
+                  class="accordion-button collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#panelsStayOpen-collapseTwo"
+                  aria-expanded="true"
+                  aria-controls="panelsStayOpen-collapseTwo"
+                >
+                  Challenge
+                </button>
+              </h2>
+              <div
+                id="panelsStayOpen-collapseTwo"
+                class="accordion-collapse collapse"
+              >
+                <div class="accordion-body">
+                  <div class="section-challenge"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
+    <script
+      src="/libs/src-min-noconflict/ace.js"
+      type="text/javascript"
+      charset="utf-8"
+    ></script>
+
+    <script src="/libs/src-min-noconflict/ext-language_tools.js"></script>
     <script>
       (function () {
+        ace.require('ace/ext/language_tools');
+
         const EscapeTheCode = (function () {
           const EscapeTheCode = {};
 
@@ -127,6 +172,8 @@
             challenges: [],
             baseUrl: '<%= apiUrl %>',
             selectedChallenge: null,
+            converter: new showdown.Converter(),
+            editor: null,
           };
 
           const dom = {
@@ -191,7 +238,7 @@
               html += `<p>${section.description}</p>`;
 
               console.log(section);
-              html += `<div>${section.content}</div>`;
+              html += `<div>${vars.converter.makeHtml(section.content)}</div>`;
               html += `<hr />`;
 
               let challengeHTML =
@@ -210,12 +257,14 @@
               html += challengeHTML;
 
               dom.sectionContent.innerHTML = html;
+              dom.sectionChallenge.innerHTML = '';
             },
 
             displayChallenge: (challenge) => {
               let html = `<h3>${challenge.title}</h3>`;
-              html += `<p>${challenge.description}</p>`;
-              html += `<textarea id="challenge-answer" class="form-control" rows="5"></textarea>`;
+              html += `<div>${vars.converter.makeHtml(challenge.description)}</div>`;
+              html += `<pre id="editor" style='width: 100%; height: 300px;'></pre>`;
+              // html += `<textarea id="challenge-answer" class="form-control" rows="5"></textarea>`;
               html += `<hr />`;
               html += `<div id="js-challenge-result"></div>`;
               html += `<div class="challenge-actions">
@@ -223,58 +272,100 @@
                               <button class="btn btn-primary js-submit">Submit</button>
                             </div>`;
               dom.sectionChallenge.innerHTML = html;
+              vars.editor = ace.edit('editor');
+              vars.editor.setTheme('ace/theme/twilight');
+              vars.editor.session.setMode('ace/mode/javascript');
+              vars.editor.setOptions({
+                enableBasicAutocompletion: true,
+                enableSnippets: true,
+                enableLiveAutocompletion: false,
+              });
             },
             displayChallengeResult: (result) => {
               const resultDiv = document.getElementById('js-challenge-result');
 
-              const resultHTML = result.result;
-              const codeOutputHTML = result.codeOutput;
-              let syntaxErrorsHTML = '<ul>';
+              let allTestsPassed = false;
+              if (result.status === 'ok') {
+                allTestsPassed = result.results.every((t) => t.ok);
+              }
 
-              result.syntaxErrors.forEach((error) => {
-                syntaxErrorsHTML += `<li>${error.code} at line number ${error.lineNumber}, column ${error.columnNumber}</li> `;
-              });
+              const resultHTML = `<h2>Result: ${allTestsPassed ? 'PASS' : 'FAIL'}</h2>`;
 
-              syntaxErrorsHTML += '</ul>';
+              let testsHTML = '';
+              if (result.status === 'ok') {
+                testsHTML += '<ul>';
 
-              let feedbackHTML = '';
+                testsHTML +=
+                  '<li>' +
+                  result.results
+                    .map((r, i) => {
+                      const testNum = i + 1;
+                      let testHTML = `[${r.ms}ms] | `;
+                      if (r.ok) {
+                        testHTML += `Test ${testNum}: <span style="color:green;">PASSED</span>`;
+                        return testHTML;
+                      }
 
-              feedbackHTML += '<h3>Recommendations</h3>';
+                      const method =
+                        'assert_print' in r
+                          ? 'assert_print'
+                          : 'assert' in r
+                            ? 'assert'
+                            : '';
+                      if (!method) {
+                        testHTML += `Test ${testNum}: <span style="color:red;">FAILED</span>`;
+                        return testHTML;
+                      }
 
-              feedbackHTML += result.feedback.length
-                ? '<ul><li>' + result.feedback.join('</li><li>') + '</li></ul>'
-                : '';
-              feedbackHTML += '<h3>Feedback</h3>';
-              feedbackHTML += result.recommendations.length
-                ? '<ul><li>' +
-                  result.recommendations
-                    .map(
-                      (r) =>
-                        `<p><b>Message:</b>${r.message}</p><p><b>Reason:</b>${r.reason}</p>`,
-                    )
+                      testHTML += `Test ${testNum}: <span style="color:red;">FAILED</span> - Expected '${r[method].diff.expected}', got '${r[method].diff.actual}'`;
+                      return testHTML;
+                    })
                     .join('</li><li>') +
-                  '</li></ul>'
-                : '';
+                  '</li>';
+
+                testsHTML += '</ul>';
+              }
+
+              let codeErrorsHTML = '<pre>';
+
+              // Handles Syntax Errors
+              if (result.status === 'parse_error') {
+                const codeFrameParts = result.codeFrame.split('\n');
+                const codeFrameCode = codeFrameParts[0];
+                const condeFrameIndicator = (
+                  ' '.repeat(5 + result.errorLine.toString().length) +
+                  codeFrameParts[1]
+                ).replaceAll(/\s/g, '&nbsp;');
+                codeErrorsHTML += `${codeFrameCode + '<br />' + condeFrameIndicator} at line number ${result.errorLine}, column ${result.errorColumn}`;
+              }
+
+              // Handles Reference Error,  Runtime Error and others
+              if (
+                result.status === 'ok' &&
+                result.results.some((r) => r.error)
+              ) {
+                const firstError = result.results[0];
+                codeErrorsHTML += firstError.error;
+              }
+
+              // Handles timeout errors
+              if (result.status === 'timeout') {
+                codeErrorsHTML += result.detail;
+              }
+
+              codeErrorsHTML += '</pre>';
 
               let html = `<div class="my-2"><ul class="nav nav-tabs" id="myTab" role="tablist">
         <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home-tab-pane" type="button" role="tab" aria-controls="home-tab-pane" aria-selected="true">Result</button>
+          <button class="nav-link active" id="result-tab" data-bs-toggle="tab" data-bs-target="#result-tab-pane" type="button" role="tab" aria-controls="result-tab-pane" aria-selected="true">Result</button>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-tab-pane" type="button" role="tab" aria-controls="profile-tab-pane" aria-selected="false">Code Output</button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="contact-tab" data-bs-toggle="tab" data-bs-target="#contact-tab-pane" type="button" role="tab" aria-controls="contact-tab-pane" aria-selected="false">Errors</button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="feedback-tab" data-bs-toggle="tab" data-bs-target="#feedback-tab-pane" type="button" role="tab" aria-controls="contact-tab-pane" aria-selected="false">Feedback</button>
+          <button class="nav-link" id="errors-tab" data-bs-toggle="tab" data-bs-target="#errors-tab-pane" type="button" role="tab" aria-controls="errors-tab-pane" aria-selected="false">Errors ${codeErrorsHTML.length > 0 ? '*' : ''}</button>
         </li>
       </ul>
       <div class="tab-content" id="myTabContent">
-        <div class="tab-pane fade show active" id="home-tab-pane" role="tabpanel" aria-labelledby="home-tab" tabindex="0">${resultHTML}</div>
-        <div class="tab-pane fade" id="profile-tab-pane" role="tabpanel" aria-labelledby="profile-tab" tabindex="0">${codeOutputHTML}</div>
-        <div class="tab-pane fade" id="contact-tab-pane" role="tabpanel" aria-labelledby="contact-tab" tabindex="0">${syntaxErrorsHTML}</div>
-        <div class="tab-pane fade" id="feedback-tab-pane" role="tabpanel" aria-labelledby="feedback-tab" tabindex="0">${feedbackHTML}</div>
+        <div class="tab-pane fade show active" id="result-tab-pane" role="tabpanel" aria-labelledby="result-tab" tabindex="0">${resultHTML + testsHTML}</div>
+        <div class="tab-pane fade" id="errors-tab-pane" role="tabpanel" aria-labelledby="errors-tab" tabindex="0">${codeErrorsHTML}</div>
       </div>
       </div>
                     `;
@@ -407,6 +498,8 @@
               console.log(vars.selectedChallenge);
             },
             handleSubmitAnswer: async (e) => {
+              const codeAnswer = vars.editor.getValue();
+              console.log('codeAnswer', codeAnswer);
               Swal.fire({
                 title: 'Are you sure?',
                 showCancelButton: true,
@@ -415,9 +508,7 @@
                 preConfirm: async (login) => {
                   try {
                     //get the answer
-                    const answer = encodeURIComponent(
-                      document.getElementById('challenge-answer').value,
-                    );
+                    const answer = encodeURIComponent(codeAnswer);
                     const challengeId = vars.selectedChallenge.id;
                     // post answer to api
                     const response = await ajax.submitAnswer(
@@ -436,7 +527,10 @@
               }).then((result, response) => {
                 console.log(result, response);
                 if (result.isConfirmed) {
-                  if (result.value.result === 'success') {
+                  if (
+                    result.value.status === 'ok' &&
+                    result.value.results.every((x) => x.ok)
+                  ) {
                     Swal.fire({
                       title: 'Yey!',
                       text: 'Great job!',

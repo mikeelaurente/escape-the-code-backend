@@ -4,6 +4,7 @@ import * as schema from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { ResolveFnOutput } from 'module';
 import { runCode } from '../runner';
+import { runWithDenoWindows, CodeTest } from '../runners/deno.runner';
 
 export const createStories = async (
   req: Request,
@@ -74,49 +75,18 @@ export const submitAnswer = async (
     where: eq(schema.challenges.id, challengeId),
   });
 
-  const question = `
-RESPOND IN JSON FORMAT:
-{
-    "code_output": "<the code output from submitted CODE>",
-    "result": "success or failed. Determine if the submitted CODE output is equal to the EXPECTED OUTPUT",
-    "syntax_errors": [
-        { "code": "<the code snippet with error line by line, make sure to properly escape the snippet>", "lineNumber": <number>, "columnNumber": <number> }
-    ]
-    "recommendations": [
-        { "message": "<message>", "reason": "<reason>" }
-    ],
-    "feedback": []
-}
-EXPECTED OUTPUT:
-${challenge?.expectedOutput}
-LANGUAGE:
-Javascript
-CODE:
-${answer.trim()}
-`;
+  const codeTests = JSON.parse(challenge?.expectedOutput || '[]') as CodeTest[];
+  console.log('challenge', challenge);
 
-  console.log('QUESTION:');
-  console.log(question);
+  const runnerResponse = await runWithDenoWindows({
+    code: answer,
+    tests: codeTests,
+    timeoutMs: 3000,
+    heapMb: 256,
+    softenCpu: false,
+  });
 
-  // submit code to llm
-  const llmResponse = await runCode(question);
+  console.log('runnerResponse', runnerResponse);
 
-  let parsed: any = {};
-  try {
-    let content = llmResponse.trim().replace(/\n$/, '');
-    parsed = JSON.parse(content);
-  } catch (e) {
-    console.log(e);
-    parsed = {};
-  }
-
-  const response = {
-    codeOutput: parsed.code_output,
-    result: parsed.result,
-    syntaxErrors: parsed.syntax_errors,
-    feedback: parsed.feedback,
-    recommendations: parsed.recommendations,
-  };
-
-  res.json(response);
+  res.json(runnerResponse);
 };
