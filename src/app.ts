@@ -18,9 +18,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/users', userRoutes);
 app.use('/api/stories', storyRoutes);
 
+app.get('/dashboard', async (req: Request, res: Response) => {
+  res.render('dashboard', {
+    title: 'EscapeTheCode',
+    apiUrl: 'http://localhost:' + process.env.PORT + '/api',
+  });
+});
+
 app.get('/', async (req: Request, res: Response) => {
   res.render('index', {
-    title: 'My Express EJS App',
+    title: 'EscapeTheCode',
     apiUrl: 'http://localhost:' + process.env.PORT + '/api',
   });
 });
