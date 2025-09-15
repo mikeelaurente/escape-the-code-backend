@@ -1,0 +1,9 @@
+@url=http://localhost:3000/api
+
+
+POST {{url}}/runner/run
+Content-Type: application/json
+
+{
+    "code": "Y29uc29sZS5sb2coIm1pa2VlIik7"
+}

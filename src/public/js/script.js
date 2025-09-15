@@ -47,14 +47,16 @@ const EscapeTheCode = (function () {
       console.log(response.data);
       return response.data;
     },
+    runSpell: async (spell) => {
+      const response = await vars.apiClient.post('/runner/run', {
+        code: btoa(spell),
+      });
+      return response.data;
+    },
   };
 
   const renderers = {
     displayChapters: () => {
-      /*
-        
-        */
-
       let chaptersHTML = '<li class="sidebar-header">Chapters</li>';
       vars.story.chapters.forEach((chapter) => {
         sections = chapter.sections;
@@ -63,10 +65,10 @@ const EscapeTheCode = (function () {
         sections.forEach((section) => {
           sectionItemsHTML += `
             <li class="sidebar-item js-sidenav-item">
-                <a data-chapter="${chapter.id}" 
+                <a href="#" data-chapter="${chapter.id}" 
                     data-id="${section.id}"
                     class="sidebar-link js-section js-sidenav-item" 
-                href="#">${section.title}</a>
+                >${section.title}</a>
             </li>
         `;
         });
@@ -74,7 +76,7 @@ const EscapeTheCode = (function () {
         let sectionsHTML = `
         <ul
             id="chapter-${chapter.id}"
-            class="sidebar-dropdown list-unstyled collapse"
+            class="sidebar-dropdown list-unstyled collapse show"
             >
             ${sectionItemsHTML}
         </ul>
@@ -95,6 +97,59 @@ const EscapeTheCode = (function () {
       });
 
       dom.sidenav.innerHTML = chaptersHTML;
+      dom.sidenav.style.opacity = 0;
+      setTimeout(() => {
+        window.initializeSimplebar();
+        setTimeout(() => {
+          Array.prototype.forEach.call(
+            document.querySelectorAll('.sidebar-dropdown.show'),
+            (list) => {
+              list.classList.remove('show');
+            },
+          );
+
+          dom.sidenav.style.opacity = 1;
+        }, 150);
+      }, 50);
+    },
+
+    displaySectionRunnables: (runnables) => {
+      let html = '';
+
+      html += `<div class="accordion" id="runnableSpell">`;
+      runnables.forEach((runnable, i) => {
+        let spell = btoa(encodeURIComponent(runnable.code));
+
+        html += `
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${i}" aria-controls="#collapse-${i}">
+              ${runnable.title}
+            </button>
+          </h2>
+          <div id="collapse-${i}" class="accordion-collapse collapse" data-bs-parent="#runnableSpell">
+            <div class="accordion-body">
+              <pre><code>${runnable.code}</code></pre>
+              <pre class="js-spell-output-${i}"></pre>
+              <div class="d-flex justify-content-end">
+                <button data-id="${i}" data-spell="${spell}" class="btn btn-sm btn-bitbucket js-run-spell">
+                  <i class="fas fa-play me-1"></i>
+                  Run
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        `;
+      });
+      html += `</div>`;
+
+      if (!runnables || runnables.length === 0) {
+        dom.sectionContent.querySelector('#spell').innerHTML =
+          'No spell available';
+      } else {
+        dom.sectionContent.querySelector('#spell').innerHTML = html;
+      }
     },
 
     displaySectionContent: (section) => {
@@ -109,6 +164,15 @@ const EscapeTheCode = (function () {
       if (dom.btnLessonAccordion.classList.contains('collapsed')) {
         dom.btnLessonAccordion.click();
       }
+
+      let runnables = [];
+      try {
+        runnables = JSON.parse(section.runnables);
+      } catch (e) {
+        runnables = [];
+      }
+
+      renderers.displaySectionRunnables(runnables);
 
       // find the challenge with the correct mode
       const challenge = section.challenges.find(
@@ -152,7 +216,7 @@ const EscapeTheCode = (function () {
         allTestsPassed = result.results.every((t) => t.ok);
       }
 
-      const resultHTML = `<h2>Result: ${allTestsPassed ? 'PASS' : 'FAIL'}</h2>`;
+      const resultHTML = `<h2>Result: ${allTestsPassed ? '<span style="color: green;">PASS</span>' : '<span style="color: red;">FAIL</span>'}</h2>`;
 
       let testsHTML = '';
       if (result.status === 'ok') {
@@ -214,7 +278,7 @@ const EscapeTheCode = (function () {
 
       codeErrorsHTML += '</pre>';
 
-      let html = `<div class="my-2"><ul class="nav nav-tabs" id="myTab" role="tablist">
+      let html = `<div class="my-2 container p-1"><ul class="nav nav-tabs" id="myTab" role="tablist">
         <li class="nav-item" role="presentation">
           <button class="nav-link active" id="result-tab" data-bs-toggle="tab" data-bs-target="#result-tab-pane" type="button" role="tab" aria-controls="result-tab-pane" aria-selected="true">Result</button>
         </li>
@@ -223,8 +287,8 @@ const EscapeTheCode = (function () {
         </li>
       </ul>
       <div class="tab-content" id="myTabContent">
-        <div class="tab-pane fade show active" id="result-tab-pane" role="tabpanel" aria-labelledby="result-tab" tabindex="0">${resultHTML + testsHTML}</div>
-        <div class="tab-pane fade" id="errors-tab-pane" role="tabpanel" aria-labelledby="errors-tab" tabindex="0">${codeErrorsHTML}</div>
+        <div class="py-3 tab-pane fade show active" id="result-tab-pane" role="tabpanel" aria-labelledby="result-tab" tabindex="0"><pre>${resultHTML + testsHTML}</pre></div>
+        <div class="py-3 tab-pane fade" id="errors-tab-pane" role="tabpanel" aria-labelledby="errors-tab" tabindex="0"><pre>${codeErrorsHTML}</pre></div>
       </div>
       </div>
                     `;
@@ -249,6 +313,18 @@ const EscapeTheCode = (function () {
           ]
       }*/
     },
+
+    displaySpellOutput: (id, results) => {
+      let html = '';
+      results.forEach((output) => {
+        html +=
+          `<pre style="background:#111; color:#0f0; padding:10px; border-radius:6px; font-family:monospace;"><code>` +
+          output.logs.map((l) => l.args.join()).join('<br />') +
+          `</code></pre>`;
+      });
+      dom.sectionContent.querySelector('.js-spell-output-' + id).innerHTML =
+        html;
+    },
   };
 
   EscapeTheCode.bindEvents = () => {
@@ -268,6 +344,15 @@ const EscapeTheCode = (function () {
       'click',
       eventHanders.handleSidenavItemClicked,
     );
+    dom.sectionContent.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = e.target;
+      if (target.classList.contains('js-run-spell')) {
+        eventHanders.handleRunSpell(target);
+      }
+    });
   };
 
   const eventHanders = {
@@ -424,6 +509,38 @@ const EscapeTheCode = (function () {
           }
         }
       });
+    },
+
+    handleRunSpell: async (target) => {
+      let icon = null;
+      try {
+        const spell = target.getAttribute('data-spell');
+        const id = target.getAttribute('data-id');
+        let code = atob(spell);
+
+        target.classList.remove('disabled');
+        target.classList.add('disabled');
+
+        icon = target.querySelector('i');
+        icon.classList.remove('fa-play');
+        icon.classList.add('fa-spinner');
+        icon.classList.add('fa-spin');
+
+        const response = await ajax.runSpell(code);
+        console.log('response', response);
+
+        renderers.displaySpellOutput(id, response.results);
+      } catch (error) {
+        console.log(error);
+        alert('error');
+      } finally {
+        target.classList.remove('disabled');
+        if (icon) {
+          icon.classList.add('fa-play');
+          icon.classList.remove('fa-spin');
+          icon.classList.remove('fa-spinner');
+        }
+      }
     },
   };
 

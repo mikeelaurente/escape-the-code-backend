@@ -34,7 +34,13 @@
   transform: rotate(45deg);
   transition: all 0.2s ease-out;
 }
+.sidebar-dropdown .sidebar-item .sidebar-link:hover {
+  background: transparent;
+  border-left: 0;
+  color: #e9ecef;
+  font-weight: 400;
+}
 
 main.content {
-  background-image: url('/img/bg.gif');
+  /* background-image: url('/img/bg.gif'); */
 }

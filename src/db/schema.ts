@@ -8,6 +8,7 @@ import {
   json,
   text,
 } from 'drizzle-orm/mysql-core';
+import { createInsertSchema } from 'drizzle-zod';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -105,6 +106,7 @@ export const sections = mysqlTable('sections', {
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   content: text('content').notNull(),
+  runnables: varchar({ length: 2048 }).notNull(),
   rewardOptions: json('reward_options')
     .$type<{
       easy: number;
@@ -206,3 +208,5 @@ export const challengeRelations = relations(challenges, ({ one, many }) => ({
   answers: many(challengeAnswers),
   hints: many(challengeHints),
 }));
+
+export const insertUserSchema = createInsertSchema(users);

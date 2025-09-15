@@ -36,7 +36,7 @@ export type CodeTest = {
 
 export interface RunOpts {
   code: string;
-  tests: CodeTest[];
+  tests?: CodeTest[];
   timeoutMs: number;
   /** Optional V8 heap cap in MB (applies to Deno child). Default: 256. */
   heapMb?: number;
@@ -223,6 +223,11 @@ export const HARNESS_BATCH = `
 
           if ("expect_print" in test) {
             let printed = logs.slice(base).filter(l => l.level === "log" || l.level === "info").map(l => l.args.join('')).join('');
+            try {
+              const expect_print_value = JSON.parse(test.expect_print);
+              test.expect_print = expect_print_value;
+            } catch(e) {
+            }
             if (typeof test.expect_print === 'number') {
               printed = Number(printed);
             }
@@ -231,12 +236,20 @@ export const HARNESS_BATCH = `
                 printed = printed === 'true' ? true : false;
               }
             }
-            if (printed !== test.expect_print) {
-                passed = false;
-                diff = { path: "print", expected: test.expect_print, actual: printed };
+            if (typeof test.expect_print === 'object' && Array.isArray(test.expect_print)) {
+                printed = logs.slice(base).filter(l => l.level === "log" || l.level === "info").map(l => l.args.flat()).flat();
+                const r = deepEqualWithDiff(printed, test.expect_print, eps, "$");
+                passed = !!r.equal;
+                if (!passed) diff = { path: r.path, expected: r.expected, actual: r.actual };
             } else {
-                passed = true;
+              if (printed !== test.expect_print) {
+                  passed = false;
+                  diff = { path: "print", expected: test.expect_print, actual: printed };
+              } else {
+                  passed = true;
+              }
             }
+                
         }
 
           resolve({
@@ -294,19 +307,84 @@ export const HARNESS_BATCH = `
     return Promise.all(tests.map((_, i) => runTest(i)));
   }
 
+  function runCode() {
+    if (syntaxError) {
+      // Report syntax error for every test
+      return Promise.resolve({
+          ok: false,
+          errorType: "syntax",
+          error: syntaxError,
+          logs: [],
+          ms: 0
+        });
+    }
+    
+    const t0   = Date.now();
+    const base = logs.length;
+
+    return new Promise(resolve => {
+      try {
+        let out = fn();
+
+        const onOk = (value) => {
+          resolve({
+            ok: true,
+            result: value,
+            logs: logs.slice(base),
+            ms: Date.now() - t0
+          });
+        };
+
+        const onErr = (err) => {
+          resolve({
+            ok: false,
+            error: (err?.name || "Error") + ": " + (err?.message || String(err)),
+            logs: logs.slice(base),
+            ms: Date.now() - t0
+          });
+        };
+
+        if (out && typeof out === "object" && typeof out.then === "function") {
+          out.then(onOk).catch(onErr);
+        } else {
+          onOk(out);
+        }
+      } catch (err) {
+        resolve({
+          ok: false,
+          error: (err?.name || "Error") + ": " + (err?.message || String(err)),
+          logs: logs.slice(base),
+          ms: Date.now() - t0
+        });
+      }
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Emit a single JSON payload
   // ─────────────────────────────────────────────────────────────────────────────
 
-  runAll()
-    .then(results => {
-      const enc = new TextEncoder();
-      return Deno.stdout.write(enc.encode(JSON.stringify({ ok: true, results })));
-    })
-    .catch(err => {
-      const enc = new TextEncoder();
-      return Deno.stdout.write(enc.encode(JSON.stringify({ ok: false, error: "harness_failure", detail: String(err) })));
-    });
+  if (!tests || tests.length === 0) {
+    runCode()
+      .then(results => {
+        const enc = new TextEncoder();
+        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: true, results: [results] })));
+      })
+      .catch(err => {
+        const enc = new TextEncoder();
+        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: false, error: "harness_failure", detail: String(err) })));
+      });
+  } else {
+    runAll()
+      .then(results => {
+        const enc = new TextEncoder();
+        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: true, results })));
+      })
+      .catch(err => {
+        const enc = new TextEncoder();
+        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: false, error: "harness_failure", detail: String(err) })));
+      });
+  }
 })();
 `;
 
@@ -358,7 +436,7 @@ export async function runWithDenoWindows({
   });
 
   const codeB64 = b64(code);
-  const testsB64 = b64(JSON.stringify(tests));
+  const testsB64 = b64(JSON.stringify(tests ? tests : []));
 
   const args = [
     'eval',
@@ -382,6 +460,8 @@ export async function runWithDenoWindows({
     args,
     opts: { softenCpu, timeoutMs },
   });
+
+  console.log('########userCodeResult', userCodeResult);
 
   if (
     syntaxCheckResult.status === 'parse_error' &&
