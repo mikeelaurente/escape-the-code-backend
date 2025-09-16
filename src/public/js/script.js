@@ -27,14 +27,16 @@ const EscapeTheCode = (function () {
   const ajax = {
     fetchStory: async () => {
       const response = await vars.apiClient.get('/stories');
-      const story = response.data[0];
+      const story = response.data;
       vars.story = story;
 
-      for (const chapter of story.chapters) {
-        for (const section of chapter.sections) {
-          vars.challenges = [...vars.challenges, ...section.challenges];
-        }
-      }
+      vars.allSections = vars.story.chapters.map((c) => c.sections).flat();
+    },
+    fetchSection: async (sectionId) => {
+      const response = await vars.apiClient.get(
+        '/stories/sections/' + encodeURIComponent(sectionId),
+      );
+      return response.data;
     },
     fetchChallengeHints: async (challengeId) => {
       const response = await vars.apiClient.get(
@@ -140,69 +142,6 @@ const EscapeTheCode = (function () {
     displayChapters: () => {
       let chaptersHTML = '<li class="sidebar-header">Chapters</li>';
 
-      const completedSections = vars.story.progress.map((p) => p.sectionId);
-      const allSections = vars.story.chapters
-        .map((c) => c.sections)
-        .flat()
-        .reduce((acc, cur) => {
-          acc[cur.id] = cur;
-          return acc;
-        }, {});
-      const allChapters = vars.story.chapters.reduce((acc, cur) => {
-        if (cur.id in acc) {
-          acc[cur.id].push(...cur.sections);
-        } else {
-          acc[cur.id] = [...cur.sections];
-        }
-        return acc;
-      }, {});
-
-      vars.allSections = allSections;
-      vars.allChapters = allChapters;
-
-      const completedSectionsWithDetails = vars.story.progress.map((c) => {
-        if (c.sectionId in allSections) {
-          const sectionDetails = allSections[c.sectionId];
-          return {
-            progress: c,
-            details: sectionDetails,
-          };
-        }
-      });
-
-      let lastCompleted = completedSectionsWithDetails
-        .map((c) => Number(`${c.details.chapterId}.${c.details.order}`))
-        .reduce((a, b) => Math.max(a, b), 0);
-
-      let nextSectionChapter = 1;
-      let nextSectionOrder = 1;
-      if (lastCompleted > 0) {
-        const sectionParts = lastCompleted.toString().split('.');
-        nextSectionChapter = Number(sectionParts[0]);
-        nextSectionOrder = Number(sectionParts[1]) + 1;
-        if (nextSectionChapter in allChapters) {
-          if (allChapters[nextSectionChapter].length <= nextSectionOrder) {
-            nextSectionOrder = 1;
-            nextSectionChapter += 1;
-          }
-        }
-      }
-
-      const nextSection = Object.values(allSections).find(
-        (s) => s.order == nextSectionOrder && s.chapterId == nextSectionChapter,
-      );
-
-      for (let section of Object.values(vars.allSections)) {
-        if (
-          nextSection &&
-          (section.chapterId > nextSection.chapterId ||
-            (nextSection.order < section.order &&
-              nextSection.chapterId == section.chapterId))
-        ) {
-          section.locked = true;
-        }
-      }
-
       vars.story.chapters.forEach((chapter) => {
         sections = chapter.sections;
 
@@ -210,13 +149,11 @@ const EscapeTheCode = (function () {
         sections.forEach((section) => {
           let iconHTML = '';
 
-          if (completedSections.indexOf(section.id) > -1) {
+          if (section.completed) {
             iconHTML += '<i class="fas fa-circle-check text-success"></i>';
           }
-          if (section.id in vars.allSections) {
-            if (vars.allSections[section.id].locked) {
-              iconHTML = `<i class="fas fa-lock"></i>`;
-            }
+          if (section.locked) {
+            iconHTML = `<i class="fas fa-lock"></i>`;
           }
           sectionItemsHTML += `
             <li class="sidebar-item js-sidenav-item">
@@ -317,6 +254,7 @@ const EscapeTheCode = (function () {
       });
       html += `</div>`;
 
+      console.log(runnables);
       if (!runnables || runnables.length === 0) {
         dom.sectionContent.querySelector('#spell').innerHTML =
           'No spell available';
@@ -363,6 +301,8 @@ const EscapeTheCode = (function () {
       } catch (e) {
         runnables = [];
       }
+
+      console.log(section);
 
       renderers.displaySectionRunnables(runnables);
 
@@ -568,11 +508,22 @@ const EscapeTheCode = (function () {
       }
     },
 
-    handleSection: (e) => {
+    handleSection: async (e) => {
       const sectionTarget = e.target;
       const sectionId = sectionTarget.getAttribute('data-id');
-      const section =
-        sectionId in vars.allSections ? vars.allSections[sectionId] : null;
+
+      const currentSection = vars.allSections.find((s) => s.id == sectionId);
+      let section = null;
+      if (currentSection.locked) {
+        section = currentSection;
+      } else {
+        section = await ajax.fetchSection(sectionId);
+        if (currentSection) {
+          section.locked = currentSection.locked;
+          section.completed = currentSection.completed;
+        }
+      }
+
       vars.selectedSection = section;
       localStorage.setItem('lastSelectedSection', sectionId);
 
