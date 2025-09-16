@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import * as schema from './db/schema';
-import { json } from 'stream/consumers';
+import * as bcrypt from 'bcryptjs';
 
 async function main() {
   return db().transaction(async (tx) => {
@@ -22,19 +22,26 @@ async function main() {
     await tx.delete(schema.users);
 
     // Seed demo users + credits
-    const emails = ['test@gmail.com', 'test2@gmail.com', 'test3@gmail.com'];
-    for (const email of emails) {
+    for (let i = 0; i < 5; i++) {
+      let salt = await bcrypt.genSalt(10);
+
+      const hashedPassword = await bcrypt.hash('password', salt);
+
+      const email = `test${i}@mail.com`;
+
       await tx.insert(schema.users).values({
         email,
-        hashedPassword: 'password',
-        firstName: 'first',
-        lastName: 'last',
+        hashedPassword,
+        firstName: `Firstname${i}`,
+        lastName: `Lastame${i}`,
       });
-      const u = await tx.query.users.findFirst({
+
+      const currentUser = await tx.query.users.findFirst({
         where: eq(schema.users.email, email),
       });
+
       await tx.insert(schema.userCredits).values({
-        userId: u?.id,
+        userId: currentUser?.id,
         value: 100,
       });
     }
@@ -1310,7 +1317,7 @@ Input: \`"code"\` → Output shown: \`od\`
       description:
         'Zia and Pax discover satchels where numbers and words can be stored—these are variables! They learn how to compare values and speak in true/false (booleans), then use if-statements to make tiny choices in their code. By gently practicing comparisons and conditions, they unlock doors that open only for the right answers. Each lesson is friendly, slow, and designed for absolute beginners.',
       sections: [
-        // S2.1 VARIABLES: let / const / naming
+        // S2.1 VARIABLES
         {
           title: 'S2.1 — Little Pockets (Variables)',
           description:
@@ -1371,20 +1378,18 @@ Input: \`"code"\` → Output shown: \`od\`
               title: 'S2.1 Easy — Store and Show',
               description: `**Task:** Make a variable called \pet\` with the value \`"cat"\`. Print it.
 
-Steps
-1. Use \`let pet = "cat"\`.
-2. Print the variable with \`console.log(pet)\`.
-
-Example
-\`\`\`js
-let pet = "cat";
-console.log(pet);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`cat\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: 'cat' }],
+              tests: [
+                { input: '', expect_print: 'cat' },
+                { input: null, expect_print: 'cat' },
+                { input: 0, expect_print: 'cat' },
+                { input: 'ignored', expect_print: 'cat' },
+                { input: {}, expect_print: 'cat' },
+              ],
               hints: [
                 'Use let to create the variable.',
                 'Print the variable name, not the word again.',
@@ -1392,48 +1397,39 @@ console.log(pet);
             },
             {
               title: 'S2.1 Medium — Update a Pocket',
-              description: `**Task:** Make \let count = 1\`. Then change it to \`2\`. Print the new value.
+              description: `**Task:** Make \count\` start at \`1\`. Change it to \`2\`. Print the *new* value only.
 
-Steps
-1. Create the variable with \`let\`.
-2. Reassign it to \`2\`.
-3. Print it once at the end.
-
-Example
-\`\`\`js
-let count = 1;
-count = 2;
-console.log(count);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`2\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
-              tests: [{ input: '', expect_print: 2 }],
+              tests: [
+                { input: '', expect_print: 2 },
+                { input: null, expect_print: 2 },
+                { input: 'x', expect_print: 2 },
+                { input: 999, expect_print: 2 },
+              ],
               hints: [
                 'Use let (not const) so it can change.',
-                'Print only once, after updating.',
+                'Print once, after updating.',
               ],
             },
             {
               title: 'S2.1 Hard — Two Pockets, One Sum',
-              description: `**Task:** Make two variables \a = 4\` and \`b = 6\`. Print their sum.
+              description: `**Task:** Make two variables: \a = 4\` and \`b = 6\`. Print their sum.
 
-Steps
-1. Create two \`let\` variables.
-2. Print \`a + b\`.
-
-Example
-\`\`\`js
-let a = 4;
-let b = 6;
-console.log(a + b);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`10\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
-              tests: [{ input: '', expect_print: 10 }],
+              tests: [
+                { input: '', expect_print: 10 },
+                { input: null, expect_print: 10 },
+                { input: 'n/a', expect_print: 10 },
+                { input: 0, expect_print: 10 },
+              ],
               hints: ['No quotes for numbers.', 'Add first, then print once.'],
             },
           ],
@@ -1495,15 +1491,17 @@ console.log(a + b);
               title: 'S2.2 Easy — 10 % 4',
               description: `**Task:** Print the remainder when 10 is divided by 4.
 
-Example
-\`\`\`js
-console.log(10 % 4);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`2\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: 2 }],
+              tests: [
+                { input: '', expect_print: 2 },
+                { input: null, expect_print: 2 },
+                { input: 'x', expect_print: 2 },
+                { input: 0, expect_print: 2 },
+              ],
               hints: ['Compute 10 % 4 directly.', 'Print the number only.'],
             },
             {
@@ -1511,13 +1509,9 @@ console.log(10 % 4);
               description: `**Task:** The system gives you a number \n\`.  
 If \`n\` is even, print \`"even"\`. If odd, print \`"odd"\`.
 
-Steps
-1. Check \`n % 2 === 0\`.
-2. Print "even" or "odd".
-
-Example  
-Input: \`4\` → Output: \`even\`
-`,
+*Example (no code)*
+- Input: \`4\` → Output: \`even\`  
+- Input: \`7\` → Output: \`odd\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
@@ -1535,13 +1529,9 @@ Input: \`4\` → Output: \`even\`
               description: `**Task:** The system gives you \a\` and \`b\`.  
 Print the remainder of \`a % b\`. If \`b\` is \`0\`, print \`"undefined"\`.
 
-Steps
-1. If \`b === 0\`, print "undefined".
-2. Else print \`a % b\`.
-
-Example  
-Input: \`[7, 3]\` → Output: \`1\`
-`,
+*Example (no code)*
+- Input: \`[7, 3]\` → Output: \`1\`  
+- Input: \`[5, 0]\` → Output: \`undefined\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
@@ -1615,15 +1605,17 @@ Input: \`[7, 3]\` → Output: \`1\`
               title: 'S2.3 Easy — True or False',
               description: `**Task:** Print the result of \`7 > 5\`.
 
-Example
-\`\`\`js
-console.log(7 > 5);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`true\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: true }],
+              tests: [
+                { input: '', expect_print: true },
+                { input: null, expect_print: true },
+                { input: 0, expect_print: true },
+                { input: 'ignored', expect_print: true },
+              ],
               hints: [
                 'Use > to compare.',
                 'Print the boolean result directly.',
@@ -1634,9 +1626,9 @@ console.log(7 > 5);
               description: `**Task:** The system gives you \a\` and \`b\`.  
 Print \`true\` if \`a === b\`, else print \`false\`.
 
-Example  
-Input: \`[3, 3]\` → Output: \`true\`
-`,
+*Example (no code)*
+- Input: \`[3, 3]\` → Output: \`true\`  
+- Input: \`[3, 4]\` → Output: \`false\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
@@ -1654,13 +1646,9 @@ Input: \`[3, 3]\` → Output: \`true\`
               description: `**Task:** The system gives you \n, low, high\`.  
 Print \`true\` if \`n\` is between \`low\` and \`high\` (inclusive). Else print \`false\`.
 
-Steps
-1. Check \`n >= low\` and \`n <= high\`.
-2. Print \`true\` or \`false\`.
-
-Example  
-Input: \`[5, 1, 5]\` → Output: \`true\`
-`,
+*Example (no code)*
+- Input: \`[5, 1, 5]\` → Output: \`true\`  
+- Input: \`[0, 1, 5]\` → Output: \`false\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
@@ -1672,14 +1660,14 @@ Input: \`[5, 1, 5]\` → Output: \`true\`
                 { input: [7, 7, 7], expect_print: true },
               ],
               hints: [
-                'Use two comparisons joined later (next section we join).',
-                'For now, you can use parentheses with && (see next).',
+                'Join checks with >= and <=; print true/false.',
+                'Be inclusive of the ends.',
               ],
             },
           ],
         },
 
-        // S2.4 BOOLEANS & LOGICAL (&&, ||, !)
+        // S2.4 LOGIC
         {
           title: 'S2.4 — Tiny Truths (Booleans & Logic)',
           description:
@@ -1737,15 +1725,17 @@ Input: \`[5, 1, 5]\` → Output: \`true\`
               title: 'S2.4 Easy — At Least One',
               description: `**Task:** Print the result of \true || false\`.
 
-Example
-\`\`\`js
-console.log(true || false);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`true\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: true }],
+              tests: [
+                { input: '', expect_print: true },
+                { input: null, expect_print: true },
+                { input: 'x', expect_print: true },
+                { input: 0, expect_print: true },
+              ],
               hints: ['OR is true if any side is true.'],
             },
             {
@@ -1753,13 +1743,9 @@ console.log(true || false);
               description: `**Task:** The system gives you \n\`.  
 Print \`true\` if \`n\` is between 1 and 10 inclusive, else \`false\`.
 
-Steps
-1. Check \`n >= 1\` and \`n <= 10\`.
-2. Join with \`&&\`.
-
-Example  
-Input: \`5\` → Output: \`true\`
-`,
+*Example (no code)*
+- Input: \`5\` → Output: \`true\`  
+- Input: \`11\` → Output: \`false\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
@@ -1780,13 +1766,9 @@ Input: \`5\` → Output: \`true\`
               description: `**Task:** The system gives you a word.  
 Print \`true\` if it is not empty, else print \`false\`.
 
-Steps
-1. Empty means \`word.length === 0\`.
-2. Use NOT to flip.
-
-Example  
-Input: \`"hi"\` → Output: \`true\`
-`,
+*Example (no code)*
+- Input: \`"hi"\` → Output: \`true\`  
+- Input: \`""\` → Output: \`false\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
@@ -1805,7 +1787,7 @@ Input: \`"hi"\` → Output: \`true\`
           ],
         },
 
-        // S2.5 IF (single)
+        // S2.5 IF
         {
           title: 'S2.5 — If This, Then That',
           description:
@@ -1857,14 +1839,9 @@ Input: \`"hi"\` → Output: \`true\`
               title: 'S2.5 Easy — If Nice',
               description: `**Task:** If \a > 5\`, print \`"nice"\`. Otherwise, print nothing.
 
-Example
-\`\`\`js
-let a = 6;
-if (a > 5) {
-  console.log("nice");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`6\` → Output: \`nice\`  
+- Input: \`5\` → Output: *(nothing)*`,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
@@ -1881,14 +1858,9 @@ if (a > 5) {
               title: 'S2.5 Medium — If Even',
               description: `**Task:** The system gives you \n\`. If it is even, print \`"even"\`. Else, print nothing.
 
-Example
-\`\`\`js
-let n = 8;
-if (n % 2 === 0) {
-  console.log("even");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`8\` → Output: \`even\`  
+- Input: \`3\` → Output: *(nothing)*`,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
@@ -1905,14 +1877,9 @@ if (n % 2 === 0) {
               title: 'S2.5 Hard — If In Range',
               description: `**Task:** The system gives you \n\`. If \`1 <= n <= 10\`, print \`"ok"\`. Else, print nothing.
 
-Example
-\`\`\`js
-let n = 5;
-if (n >= 1 && n <= 10) {
-  console.log("ok");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`5\` → Output: \`ok\`  
+- Input: \`11\` → Output: *(nothing)*`,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
@@ -1982,16 +1949,9 @@ if (n >= 1 && n <= 10) {
               description: `**Task:** The system gives you \n\`.  
 Print \`"even"\` if even, otherwise \`"odd"\`.
 
-Example
-\`\`\`js
-let n = 4;
-if (n % 2 === 0) {
-  console.log("even");
-} else {
-  console.log("odd");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`4\` → Output: \`even\`  
+- Input: \`9\` → Output: \`odd\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
@@ -2009,16 +1969,9 @@ if (n % 2 === 0) {
               description: `**Task:** The system gives you \age\`.  
 If \`age >= 13\`, print \`"allowed"\`. Else print \`"blocked"\`.
 
-Example
-\`\`\`js
-let age = 15;
-if (age >= 13) {
-  console.log("allowed");
-} else {
-  console.log("blocked");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`15\` → Output: \`allowed\`  
+- Input: \`12\` → Output: \`blocked\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
@@ -2036,16 +1989,9 @@ if (age >= 13) {
               description: `**Task:** The system gives you \n\`.  
 If \`1 <= n <= 10\`, print \`"inside"\`. Else print \`"outside"\`.
 
-Example
-\`\`\`js
-let n = 10;
-if (n >= 1 && n <= 10) {
-  console.log("inside");
-} else {
-  console.log("outside");
-}
-\`\`\`
-`,
+*Example (no code)*
+- Input: \`10\` → Output: \`inside\`  
+- Input: \`0\` → Output: \`outside\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
@@ -2128,16 +2074,17 @@ if (n >= 1 && n <= 10) {
               title: 'S3.1 Easy — Two Pets',
               description: `**Task:** Make an array with \"cat"\` and \`"dog"\`. Print the array.
 
-Example
-\`\`\`js
-let pets = ["cat","dog"];
-console.log(pets);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`["cat","dog"]\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: '["cat","dog"]' }],
+              tests: [
+                { input: '', expect_print: '["cat","dog"]' },
+                { input: null, expect_print: '["cat","dog"]' },
+                { input: 'ignored', expect_print: '["cat","dog"]' },
+                { input: 0, expect_print: '["cat","dog"]' },
+              ],
               hints: [
                 'Use square brackets with commas.',
                 'Print the array variable.',
@@ -2147,32 +2094,34 @@ console.log(pets);
               title: 'S3.1 Medium — Three Numbers',
               description: `**Task:** Create \`[1, 2, 3]\ and print it.
 
-Example
-\`\`\`js
-let nums = [1,2,3];
-console.log(nums);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`[1,2,3]\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
-              tests: [{ input: '', expect_print: '[1,2,3]' }],
+              tests: [
+                { input: '', expect_print: '[1,2,3]' },
+                { input: null, expect_print: '[1,2,3]' },
+                { input: 'n/a', expect_print: '[1,2,3]' },
+                { input: 42, expect_print: '[1,2,3]' },
+              ],
               hints: ['No quotes for numbers.', 'Separate with commas.'],
             },
             {
               title: 'S3.1 Hard — Mixed Trio',
               description: `**Task:** Create \`["sun", 7, "moon"]\ and print it.
 
-Example
-\`\`\`js
-let a = ["sun", 7, "moon"];
-console.log(a);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`["sun",7,"moon"]\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
-              tests: [{ input: '', expect_print: '["sun",7,"moon"]' }],
+              tests: [
+                { input: '', expect_print: '["sun",7,"moon"]' },
+                { input: null, expect_print: '["sun",7,"moon"]' },
+                { input: 0, expect_print: '["sun",7,"moon"]' },
+                { input: 'x', expect_print: '["sun",7,"moon"]' },
+              ],
               hints: [
                 'Strings need quotes, numbers do not.',
                 'Keep the order.',
@@ -2236,47 +2185,51 @@ console.log(a);
               title: 'S3.2 Easy — Count 3',
               description: `**Task:** Print the length of \`["a","b","c"]\.
 
-Example
-\`\`\`js
-console.log(["a","b","c"].length);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`3\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: 3 }],
+              tests: [
+                { input: '', expect_print: 3 },
+                { input: null, expect_print: 3 },
+                { input: 'x', expect_print: 3 },
+                { input: 0, expect_print: 3 },
+              ],
               hints: ['Use .length right away.', 'Print the number.'],
             },
             {
               title: 'S3.2 Medium — Length of Empty',
               description: `**Task:** Make an empty array and print its length.
 
-Example
-\`\`\`js
-let a = [];
-console.log(a.length);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`0\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
-              tests: [{ input: '', expect_print: 0 }],
+              tests: [
+                { input: '', expect_print: 0 },
+                { input: null, expect_print: 0 },
+                { input: 'ignored', expect_print: 0 },
+                { input: {}, expect_print: 0 },
+              ],
               hints: ['[] is an empty array.', 'Length is 0.'],
             },
             {
               title: 'S3.2 Hard — Count Mixed',
               description: `**Task:** Create \`["a", 1, "b", 2]\. Print its length.
 
-Example
-\`\`\`js
-let m = ["a", 1, "b", 2];
-console.log(m.length);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`4\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
-              tests: [{ input: '', expect_print: 4 }],
+              tests: [
+                { input: '', expect_print: 4 },
+                { input: null, expect_print: 4 },
+                { input: 'x', expect_print: 4 },
+                { input: 0, expect_print: 4 },
+              ],
               hints: ['Length counts all items, any type.', 'Print once.'],
             },
           ],
@@ -2338,48 +2291,51 @@ console.log(m.length);
               title: 'S3.3 Easy — First Fruit',
               description: `**Task:** Given \`["apple","banana","pear"]\, print the first item.
 
-Example
-\`\`\`js
-let a = ["apple","banana","pear"];
-console.log(a[0]);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`apple\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: 'apple' }],
+              tests: [
+                { input: '', expect_print: 'apple' },
+                { input: null, expect_print: 'apple' },
+                { input: 'x', expect_print: 'apple' },
+                { input: 0, expect_print: 'apple' },
+              ],
               hints: ['First is index 0.', 'Print that item.'],
             },
             {
               title: 'S3.3 Medium — Last Color',
               description: `**Task:** Given \`["red","green","blue"]\, print the last item.
 
-Example
-\`\`\`js
-let c = ["red","green","blue"];
-console.log(c[c.length - 1]);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`blue\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
-              tests: [{ input: '', expect_print: 'blue' }],
+              tests: [
+                { input: '', expect_print: 'blue' },
+                { input: null, expect_print: 'blue' },
+                { input: 'x', expect_print: 'blue' },
+                { input: 0, expect_print: 'blue' },
+              ],
               hints: ['Use length - 1.', 'Print the item.'],
             },
             {
               title: 'S3.3 Hard — Middle Animal',
               description: `**Task:** Given \`["ant","bear","cat","dog","eel"]\, print the middle item (index 2).
 
-Example
-\`\`\`js
-let animals = ["ant","bear","cat","dog","eel"];
-console.log(animals[2]);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`cat\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
-              tests: [{ input: '', expect_print: 'cat' }],
+              tests: [
+                { input: '', expect_print: 'cat' },
+                { input: null, expect_print: 'cat' },
+                { input: 'ignored', expect_print: 'cat' },
+                { input: 0, expect_print: 'cat' },
+              ],
               hints: ['Count from 0: 0,1,2,3,4.', 'Pick index 2.'],
             },
           ],
@@ -2441,35 +2397,34 @@ console.log(animals[2]);
               title: 'S3.4 Easy — Add One',
               description: `**Task:** Start with \`["a"]\. Add \`"b"\` to the end and print.
 
-Example
-\`\`\`js
-let a = ["a"];
-a.push("b");
-console.log(a);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`["a","b"]\``,
               difficulty: 'easy',
               moduleType: 'javascript',
               rewardPoints: REWARD.easy,
-              tests: [{ input: '', expect_print: '["a","b"]' }],
+              tests: [
+                { input: '', expect_print: '["a","b"]' },
+                { input: null, expect_print: '["a","b"]' },
+                { input: 'x', expect_print: '["a","b"]' },
+                { input: 0, expect_print: '["a","b"]' },
+              ],
               hints: ['Use push once.', 'Print the array.'],
             },
             {
               title: 'S3.4 Medium — Add Two',
               description: `**Task:** Start with \`[]\. Add \`"x"\` then \`"y"\`, then print.
 
-Example
-\`\`\`js
-let a = [];
-a.push("x");
-a.push("y");
-console.log(a);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`["x","y"]\``,
               difficulty: 'medium',
               moduleType: 'javascript',
               rewardPoints: REWARD.medium,
-              tests: [{ input: '', expect_print: '["x","y"]' }],
+              tests: [
+                { input: '', expect_print: '["x","y"]' },
+                { input: null, expect_print: '["x","y"]' },
+                { input: 'n/a', expect_print: '["x","y"]' },
+                { input: 42, expect_print: '["x","y"]' },
+              ],
               hints: ['Call push twice.', 'Order matters.'],
             },
             {
@@ -2477,17 +2432,17 @@ console.log(a);
               description: `**Task:** Start with \`["dog","cat","bird"]\.  
 Remove the last item using \`pop()\`. Print the array that remains.
 
-Example
-\`\`\`js
-let a = ["dog","cat","bird"];
-a.pop();
-console.log(a);
-\`\`\`
-`,
+*Example (no code)*
+- Input: (none) → Output: \`["dog","cat"]\``,
               difficulty: 'hard',
               moduleType: 'javascript',
               rewardPoints: REWARD.hard,
-              tests: [{ input: '', expect_print: '["dog","cat"]' }],
+              tests: [
+                { input: '', expect_print: '["dog","cat"]' },
+                { input: null, expect_print: '["dog","cat"]' },
+                { input: 0, expect_print: '["dog","cat"]' },
+                { input: 'ignored', expect_print: '["dog","cat"]' },
+              ],
               hints: ['Use pop once.', 'Print the array after popping.'],
             },
           ],

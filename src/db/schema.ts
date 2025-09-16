@@ -31,7 +31,7 @@ export const userCredits = mysqlTable('user_credits', {
 export const creditUsage = mysqlTable('credit_usage', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
-  challengeHintId: int('student_id').references(() => users.id),
+  challengeHintId: int('challengeHint_id').references(() => challengeHints.id),
   cost: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),

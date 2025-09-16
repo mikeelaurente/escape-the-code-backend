@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { Session } from 'express-session';
 
 export function isAuthenticated(
   req: Request,

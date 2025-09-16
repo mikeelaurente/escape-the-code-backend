@@ -47,6 +47,15 @@ const EscapeTheCode = (function () {
       console.log(response.data);
       return response.data;
     },
+    buyHint: async (challengeId, hintId) => {
+      const response = await vars.apiClient.post(
+        '/stories/challenges/' + challengeId + '/buy-hint',
+        {
+          hintId,
+        },
+      );
+      return response.data;
+    },
     runSpell: async (spell) => {
       const response = await vars.apiClient.post('/runner/run', {
         code: btoa(spell),
@@ -112,7 +121,6 @@ const EscapeTheCode = (function () {
         }, 150);
       }, 50);
     },
-
     displaySectionRunnables: (runnables) => {
       let html = '';
 
@@ -151,7 +159,6 @@ const EscapeTheCode = (function () {
         dom.sectionContent.querySelector('#spell').innerHTML = html;
       }
     },
-
     displaySectionContent: (section) => {
       let html = `<h2>${section.title}</h2>`;
       html += `<p>${section.description}</p>`;
@@ -185,7 +192,6 @@ const EscapeTheCode = (function () {
         renderers.displayChallenge(challenge);
       }
     },
-
     displayChallenge: (challenge) => {
       console.log('displayChallenge CALLED');
       let html = `<h3>${challenge.title}</h3>`;
@@ -292,28 +298,8 @@ const EscapeTheCode = (function () {
       </div>
       </div>
                     `;
-
       resultDiv.innerHTML = html;
-
-      /*\
-                    {
-          "codeOutput": "Test\nHello There World\ntesting is not defined function error",
-          "result": "failed",
-          "syntaxErrors": [
-              {
-                  "code": "cnsol.log(\"Test\");",
-                  "lineNumber": 1,
-                  "columnNumber": 1
-              },
-              {
-                  "code": "console.lg(\"testing\");",
-                  "lineNumber": 3,
-                  "columnNumber": 1
-              }
-          ]
-      }*/
     },
-
     displaySpellOutput: (id, results) => {
       let html = '';
       results.forEach((output) => {
@@ -324,6 +310,9 @@ const EscapeTheCode = (function () {
       });
       dom.sectionContent.querySelector('.js-spell-output-' + id).innerHTML =
         html;
+    },
+    displayBoughtHints: (hint) => {
+      console.log(hint);
     },
   };
 
@@ -351,6 +340,13 @@ const EscapeTheCode = (function () {
       const target = e.target;
       if (target.classList.contains('js-run-spell')) {
         eventHanders.handleRunSpell(target);
+      }
+    });
+    dom.container.addEventListener('click', (e) => {
+      const target = e.target;
+      if (target.classList.contains('js-buy-hint')) {
+        const hintId = target.getAttribute('data-id');
+        eventHanders.handleBuyHints(hintId);
       }
     });
   };
@@ -472,7 +468,7 @@ const EscapeTheCode = (function () {
         showCancelButton: true,
         confirmButtonText: 'Submit',
         showLoaderOnConfirm: true,
-        preConfirm: async (login) => {
+        preConfirm: async () => {
           try {
             //get the answer
             const answer = encodeURIComponent(codeAnswer);
@@ -496,21 +492,20 @@ const EscapeTheCode = (function () {
             result.value.results.every((x) => x.ok)
           ) {
             Swal.fire({
-              title: 'Yey!',
-              text: 'Great job!',
+              title: '✨ Spell Cast!',
+              text: 'Your incantation worked perfectly — the quest advances!',
               icon: 'success',
             });
           } else {
             Swal.fire({
-              title: 'Ooops!',
-              text: 'Try again.!',
+              title: '🪄 Spell Fizzled!',
+              text: 'The magic faltered... check your runes and try again!',
               icon: 'error',
             });
           }
         }
       });
     },
-
     handleRunSpell: async (target) => {
       let icon = null;
       try {
@@ -541,6 +536,59 @@ const EscapeTheCode = (function () {
           icon.classList.remove('fa-spinner');
         }
       }
+    },
+    handleBuyHints: async (hintId) => {
+      Swal.fire({
+        title: 'Are you sure?',
+        showCancelButton: true,
+        confirmButtonText: 'Buy',
+        showLoaderOnConfirm: true,
+        preConfirm: async () => {
+          try {
+            //get the answer
+            const challengeId = vars.selectedChallenge.id;
+            // post hint to api
+            const response = await ajax.buyHint(challengeId, hintId);
+
+            //display response
+            renderers.displayBoughtHints(response);
+            console.log('response', response);
+            return response;
+          } catch (error) {
+            Swal.showValidationMessage(`Request failed: ${error}`);
+          }
+        },
+        allowOutsideClick: () => !Swal.isLoading(),
+      })
+        .then((result, response) => {
+          console.log(result, response);
+          if (result.isConfirmed && result.value) {
+            const data = result.value;
+            if (data.alreadyUsed) {
+              Swal.fire({
+                icon: 'info',
+                title: 'Hint already purchased',
+                text: data.hint.hintText,
+              });
+            } else {
+              Swal.fire({
+                icon: 'success',
+                title: 'Hint purchased!',
+                html: `
+            <p><strong>Your hint:</strong> ${data.purchasedHint.hintText}</p>
+            <p>Remaining credits: ${data.remainingCredits}</p>
+          `,
+              });
+            }
+          }
+        })
+        .catch(() => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Oops!',
+            text: 'Not enough credits to buy this hint.',
+          });
+        });
     },
   };
 
