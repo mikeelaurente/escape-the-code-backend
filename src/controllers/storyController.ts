@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import * as schema from '../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { runWithDenoWindows, CodeTest } from '../runners/deno.runner';
 
 export const createStories = async (
@@ -24,16 +24,22 @@ export const getStories = async (
   next: NextFunction,
 ) => {
   try {
+    const userId = Number(req.session.userId);
     const stories = await db().query.stories.findMany({
       with: {
+        progress: {
+          where: eq(schema.storyProgress.userId, userId),
+        },
         chapters: {
           with: {
             sections: {
               with: {
                 challenges: true,
               },
+              orderBy: asc(schema.sections.order),
             },
           },
+          orderBy: asc(schema.chapters.order),
         },
       },
     });
@@ -52,6 +58,12 @@ export const getChallengeHints = async (
 
   const challengeHints = await db().query.challengeHints.findMany({
     where: eq(schema.challengeHints.challengeId, challengeId),
+    columns: {
+      challengeId: true,
+      cost: true,
+      displayText: true,
+      id: true,
+    },
   });
 
   if (!challengeHints) {
@@ -133,6 +145,7 @@ export const submitAnswer = async (
 ) => {
   const challengeId = parseInt(req.params.id || '');
   const answer = decodeURIComponent(req.body.answer);
+  const userId = req.session.userId;
 
   const challenge = await db().query.challenges.findFirst({
     where: eq(schema.challenges.id, challengeId),
@@ -150,6 +163,60 @@ export const submitAnswer = async (
   });
 
   console.log('runnerResponse', runnerResponse);
+
+  const passed =
+    runnerResponse.status === 'ok' && runnerResponse.results.every((x) => x.ok);
+
+  let codeOutput = '';
+
+  if (runnerResponse.status === 'ok') {
+    codeOutput = JSON.stringify(runnerResponse.results);
+  } else if (runnerResponse.status === 'crash') {
+    codeOutput = runnerResponse.detail || 'error';
+  } else if (
+    runnerResponse.status === 'killed' ||
+    runnerResponse.status === 'timeout'
+  ) {
+    codeOutput = runnerResponse.detail || 'timeout';
+  } else if (runnerResponse.status === 'oom') {
+    codeOutput = runnerResponse.detail || 'out of memory';
+  } else if (runnerResponse.status === 'parse_error') {
+    codeOutput = runnerResponse.detail || 'syntax error';
+  }
+
+  await db()
+    .insert(schema.challengeAnswers)
+    .values({
+      userId,
+      challengeId,
+      code: answer,
+      result: passed ? 'passed' : 'failed',
+      metadata: JSON.stringify(runnerResponse),
+      codeOutput,
+    });
+
+  if (passed) {
+    const challengeWithDetails = await db().query.challenges.findFirst({
+      where: eq(schema.challenges.id, challengeId),
+      with: {
+        section: {
+          with: {
+            chapter: {
+              with: {
+                story: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    await db().insert(schema.storyProgress).values({
+      storyId: challengeWithDetails?.section?.chapter?.storyId,
+      chapterId: challengeWithDetails?.section?.chapterId,
+      sectionId: challengeWithDetails?.sectionID,
+      userId,
+    });
+  }
 
   res.json(runnerResponse);
 };

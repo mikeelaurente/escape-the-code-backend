@@ -85,6 +85,7 @@ export const stories = mysqlTable('stories', {
 export const chapters = mysqlTable('chapters', {
   id: int('id').autoincrement().primaryKey(),
   storyId: int('story_id').references(() => stories.id),
+  order: int().notNull(),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   rewardOptions: json('reward_options')
@@ -103,6 +104,7 @@ export const chapters = mysqlTable('chapters', {
 export const sections = mysqlTable('sections', {
   id: int('id').autoincrement().primaryKey(),
   chapterId: int('chapter_id').references(() => chapters.id),
+  order: int().notNull(),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   content: text('content').notNull(),
@@ -137,13 +139,12 @@ export const challenges = mysqlTable('challenges', {
 
 export const challengeAnswers = mysqlTable('challenge_answers', {
   id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').references(() => users.id),
   challengeId: int('challenge_id').references(() => challenges.id),
   code: varchar({ length: 2048 }).notNull(),
   result: varchar({ length: 2048 }).notNull(),
   metadata: varchar({ length: 2048 }),
   codeOutput: varchar({ length: 2048 }),
-  startedAt: datetime(),
-  acceptedAt: datetime(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -178,6 +179,7 @@ export const creditsRelations = relations(userCredits, ({ one }) => ({
 
 export const storyRelations = relations(stories, ({ many }) => ({
   chapters: many(chapters),
+  progress: many(storyProgress),
 }));
 
 export const chapterRelations = relations(chapters, ({ many, one }) => ({
@@ -207,6 +209,13 @@ export const challengeRelations = relations(challenges, ({ one, many }) => ({
   }),
   answers: many(challengeAnswers),
   hints: many(challengeHints),
+}));
+
+export const storyProgressRelations = relations(storyProgress, ({ one }) => ({
+  story: one(stories, {
+    fields: [storyProgress.storyId],
+    references: [stories.id],
+  }),
 }));
 
 export const insertUserSchema = createInsertSchema(users);

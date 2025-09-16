@@ -4,11 +4,16 @@ const EscapeTheCode = (function () {
 
   const vars = {
     story: null,
+    allChapters: {},
+    allSections: {},
     challenges: [],
+    lastSelectedSectionId: '',
     apiUrl: '',
     selectedChallenge: null,
+    selectedSection: null,
     converter: new showdown.Converter(),
     editor: null,
+    refreshNavOnly: false,
   };
 
   const dom = {
@@ -44,7 +49,6 @@ const EscapeTheCode = (function () {
           answer,
         },
       );
-      console.log(response.data);
       return response.data;
     },
     buyHint: async (challengeId, hintId) => {
@@ -65,19 +69,162 @@ const EscapeTheCode = (function () {
   };
 
   const renderers = {
+    displayMainContent: () => {
+      const mainContentHTML = `
+          <div class="container-fluid p-0">
+            <div class="d-flex justify-content-between">
+              <h1 class="h3 mb-3 js-section-title"></h1>
+              <div class="mb-3 row">
+                <label for="mode" class="col-sm-3 col-form-label">Mode</label>
+                <div class="col-sm-9" >
+                  <select name="mode" id="mode" class="form-control js-mode">
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+          <div class="section">
+            <div class="accordion" id="accordionPanelsStayOpenExample">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button js-btn-lesson-accordion"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#panelsStayOpen-collapseOne"
+                    aria-expanded="true"
+                    aria-controls="panelsStayOpen-collapseOne"
+                  >
+                    Lesson
+                  </button>
+                </h2>
+                <div
+                  id="panelsStayOpen-collapseOne"
+                  class="accordion-collapse collapse show"
+                >
+                  <div class="accordion-body">
+                    <div class="section-content"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#panelsStayOpen-collapseTwo"
+                    aria-expanded="true"
+                    aria-controls="panelsStayOpen-collapseTwo"
+                  >
+                    Challenge
+                  </button>
+                </h2>
+                <div
+                  id="panelsStayOpen-collapseTwo"
+                  class="accordion-collapse collapse"
+                >
+                  <div class="accordion-body">
+                    <div class="section-challenge"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+      `;
+      dom.mainContent.innerHTML = mainContentHTML;
+    },
     displayChapters: () => {
       let chaptersHTML = '<li class="sidebar-header">Chapters</li>';
+
+      const completedSections = vars.story.progress.map((p) => p.sectionId);
+      const allSections = vars.story.chapters
+        .map((c) => c.sections)
+        .flat()
+        .reduce((acc, cur) => {
+          acc[cur.id] = cur;
+          return acc;
+        }, {});
+      const allChapters = vars.story.chapters.reduce((acc, cur) => {
+        if (cur.id in acc) {
+          acc[cur.id].push(...cur.sections);
+        } else {
+          acc[cur.id] = [...cur.sections];
+        }
+        return acc;
+      }, {});
+
+      vars.allSections = allSections;
+      vars.allChapters = allChapters;
+
+      const completedSectionsWithDetails = vars.story.progress.map((c) => {
+        if (c.sectionId in allSections) {
+          const sectionDetails = allSections[c.sectionId];
+          return {
+            progress: c,
+            details: sectionDetails,
+          };
+        }
+      });
+
+      let lastCompleted = completedSectionsWithDetails
+        .map((c) => Number(`${c.details.chapterId}.${c.details.order}`))
+        .reduce((a, b) => Math.max(a, b), 0);
+
+      let nextSectionChapter = 1;
+      let nextSectionOrder = 1;
+      if (lastCompleted > 0) {
+        const sectionParts = lastCompleted.toString().split('.');
+        nextSectionChapter = Number(sectionParts[0]);
+        nextSectionOrder = Number(sectionParts[1]) + 1;
+        if (nextSectionChapter in allChapters) {
+          if (allChapters[nextSectionChapter].length <= nextSectionOrder) {
+            nextSectionOrder = 1;
+            nextSectionChapter += 1;
+          }
+        }
+      }
+
+      const nextSection = Object.values(allSections).find(
+        (s) => s.order == nextSectionOrder && s.chapterId == nextSectionChapter,
+      );
+
+      for (let section of Object.values(vars.allSections)) {
+        if (
+          nextSection &&
+          (section.chapterId > nextSection.chapterId ||
+            (nextSection.order < section.order &&
+              nextSection.chapterId == section.chapterId))
+        ) {
+          section.locked = true;
+        }
+      }
+
       vars.story.chapters.forEach((chapter) => {
         sections = chapter.sections;
 
         let sectionItemsHTML = '';
         sections.forEach((section) => {
+          let iconHTML = '';
+
+          if (completedSections.indexOf(section.id) > -1) {
+            iconHTML += '<i class="fas fa-circle-check text-success"></i>';
+          }
+          if (section.id in vars.allSections) {
+            if (vars.allSections[section.id].locked) {
+              iconHTML = `<i class="fas fa-lock"></i>`;
+            }
+          }
           sectionItemsHTML += `
             <li class="sidebar-item js-sidenav-item">
                 <a href="#" data-chapter="${chapter.id}" 
                     data-id="${section.id}"
                     class="sidebar-link js-section js-sidenav-item" 
-                >${section.title}</a>
+                > ${iconHTML} ${section.title}</a>
+
             </li>
         `;
         });
@@ -97,7 +244,7 @@ const EscapeTheCode = (function () {
                 data-chapter-id="${chapter.id}"
                 data-bs-target="#chapter-${chapter.id}"
                 data-bs-toggle="collapse"
-                class="sidebar-link collapsed"
+                class="sidebar-link collapsed js-chapter"
                 >${chapter.title}</a
               >
               ${sectionsHTML}
@@ -118,6 +265,24 @@ const EscapeTheCode = (function () {
           );
 
           dom.sidenav.style.opacity = 1;
+
+          if (vars.lastSelectedSectionId) {
+            const sideNavItem = dom.sidenav.querySelector(
+              '.js-section[data-id="' + vars.lastSelectedSectionId + '"]',
+            );
+            if (sideNavItem) {
+              sideNavItem.click();
+
+              const chapterId = sideNavItem.getAttribute('data-chapter');
+
+              const sideNavItemParent = dom.sidenav.querySelector(
+                '.js-chapter[data-chapter-id="' + chapterId + '"]',
+              );
+              if (sideNavItemParent) {
+                sideNavItemParent.click();
+              }
+            }
+          }
         }, 150);
       }, 50);
     },
@@ -160,15 +325,35 @@ const EscapeTheCode = (function () {
       }
     },
     displaySectionContent: (section) => {
-      let html = `<h2>${section.title}</h2>`;
+      if (!section) {
+        dom.mainContent.innerHTML =
+          '<div class="alert alert-warning d-flex justify-content-center">Section not found</div>';
+        return;
+      }
+
+      if (section.locked) {
+        dom.mainContent.innerHTML =
+          '<div class="alert alert-warning d-flex justify-content-center">Section is locked</div>';
+        return;
+      }
+
+      vars.selectedSection = section;
+
+      dom.mainContent.querySelector('.js-section-title').innerHTML =
+        `<h2>${section.title}</h2>`;
+
+      let html = ``;
       html += `<p>${section.description}</p>`;
 
-      console.log(section);
       html += `<div>${vars.converter.makeHtml(section.content)}</div>`;
 
       dom.sectionContent.innerHTML = html;
 
-      if (dom.btnLessonAccordion.classList.contains('collapsed')) {
+      const btnLessonAccordion = dom.mainContent.querySelector(
+        '.js-btn-lesson-accordion',
+      );
+      dom.modeSelect = dom.mainContent.querySelector('#mode');
+      if (btnLessonAccordion.classList.contains('collapsed')) {
         dom.btnLessonAccordion.click();
       }
 
@@ -193,17 +378,17 @@ const EscapeTheCode = (function () {
       }
     },
     displayChallenge: (challenge) => {
-      console.log('displayChallenge CALLED');
       let html = `<h3>${challenge.title}</h3>`;
       html += `<div>${vars.converter.makeHtml(challenge.description)}</div>`;
       html += `<pre id="editor" style='width: 100%; height: 300px;'></pre>`;
       // html += `<textarea id="challenge-answer" class="form-control" rows="5"></textarea>`;
       html += `<hr />`;
       html += `<div id="js-challenge-result"></div>`;
-      html += `<div class="challenge-actions d-flex justify-content-between">
+      html += `<div class="challenge-actions d-flex justify-content-center gap-3 border-top pt-3">
                     <button class="btn btn-info js-show-hints ">Show Hints</button>
                     <button class="btn btn-primary js-submit">Submit</button>
                 </div>`;
+      html += `<div class="continue-section d-flex justify-content-end bg-body-secondary p-3 mt-3 next-level" style="display: none !important;"></div>`;
       dom.sectionChallenge.innerHTML = html;
       vars.editor = ace.edit('editor');
       vars.editor.setTheme('ace/theme/twilight');
@@ -226,7 +411,7 @@ const EscapeTheCode = (function () {
 
       let testsHTML = '';
       if (result.status === 'ok') {
-        testsHTML += '<ul>';
+        testsHTML += '<ul class="mb-0">';
 
         testsHTML +=
           '<li>' +
@@ -293,12 +478,22 @@ const EscapeTheCode = (function () {
         </li>
       </ul>
       <div class="tab-content" id="myTabContent">
-        <div class="py-3 tab-pane fade show active" id="result-tab-pane" role="tabpanel" aria-labelledby="result-tab" tabindex="0"><pre>${resultHTML + testsHTML}</pre></div>
+        <div class="py-3 tab-pane fade show active" id="result-tab-pane" role="tabpanel" aria-labelledby="result-tab" tabindex="0"><pre class="mb-0">${resultHTML + testsHTML}</pre></div>
         <div class="py-3 tab-pane fade" id="errors-tab-pane" role="tabpanel" aria-labelledby="errors-tab" tabindex="0"><pre>${codeErrorsHTML}</pre></div>
       </div>
       </div>
                     `;
       resultDiv.innerHTML = html;
+
+      if (allTestsPassed) {
+        const divContainer =
+          dom.sectionChallenge.querySelector('.continue-section');
+        divContainer.innerHTML = `
+              <button class="btn btn-success btn-lg js-continue ">Next Level</button>
+
+        `;
+        divContainer.style.display = 'block';
+      }
     },
     displaySpellOutput: (id, results) => {
       let html = '';
@@ -319,7 +514,7 @@ const EscapeTheCode = (function () {
   EscapeTheCode.bindEvents = () => {
     dom.sidenav.addEventListener('click', eventHanders.handleSideNav);
     dom.container.addEventListener('change', eventHanders.handleSelectMode);
-    dom.sectionChallenge.addEventListener('click', (e) => {
+    dom.mainContent.addEventListener('click', (e) => {
       console.log(e);
       const target = e.target;
       if (target.classList.contains('js-show-hints')) {
@@ -328,20 +523,14 @@ const EscapeTheCode = (function () {
       if (target.classList.contains('js-submit')) {
         eventHanders.handleSubmitAnswer(target);
       }
+      if (target.classList.contains('js-run-spell')) {
+        eventHanders.handleRunSpell(target);
+      }
     });
     dom.sidenav.addEventListener(
       'click',
       eventHanders.handleSidenavItemClicked,
     );
-    dom.sectionContent.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const target = e.target;
-      if (target.classList.contains('js-run-spell')) {
-        eventHanders.handleRunSpell(target);
-      }
-    });
     dom.container.addEventListener('click', (e) => {
       const target = e.target;
       if (target.classList.contains('js-buy-hint')) {
@@ -353,9 +542,11 @@ const EscapeTheCode = (function () {
 
   const eventHanders = {
     handleSideNav: (e) => {
-      console.log(e.target);
       const target = e.target;
       if (!target) return;
+      if (vars.refreshNavOnly) {
+        return;
+      }
 
       if (target.nodeName === 'BUTTON' || target.closest('button')) {
         const toggleBtn =
@@ -379,13 +570,17 @@ const EscapeTheCode = (function () {
 
     handleSection: (e) => {
       const sectionTarget = e.target;
-      const chapterId = sectionTarget.getAttribute('data-chapter');
       const sectionId = sectionTarget.getAttribute('data-id');
-
-      const chapter = vars.story.chapters.find((c) => c.id == chapterId);
-
-      const section = chapter.sections.find((s) => s.id == sectionId);
+      const section =
+        sectionId in vars.allSections ? vars.allSections[sectionId] : null;
       vars.selectedSection = section;
+      localStorage.setItem('lastSelectedSection', sectionId);
+
+      renderers.displayMainContent();
+
+      dom.sectionContent = dom.mainContent.querySelector('.section-content');
+      dom.sectionChallenge =
+        dom.mainContent.querySelector('.section-challenge');
 
       renderers.displaySectionContent(section);
     },
@@ -458,11 +653,9 @@ const EscapeTheCode = (function () {
         icon: 'question',
         confirmButtonText: 'Close',
       });
-      console.log(vars.selectedChallenge);
     },
     handleSubmitAnswer: async (e) => {
       const codeAnswer = vars.editor.getValue();
-      console.log('codeAnswer', codeAnswer);
       Swal.fire({
         title: 'Are you sure?',
         showCancelButton: true,
@@ -475,6 +668,7 @@ const EscapeTheCode = (function () {
             const challengeId = vars.selectedChallenge.id;
             // post answer to api
             const response = await ajax.submitAnswer(challengeId, answer);
+            vars.lastSelectedSectionId = vars.selectedSection.id;
 
             //display response
             renderers.displayChallengeResult(response);
@@ -485,7 +679,6 @@ const EscapeTheCode = (function () {
         },
         allowOutsideClick: () => !Swal.isLoading(),
       }).then((result, response) => {
-        console.log(result, response);
         if (result.isConfirmed) {
           if (
             result.value.status === 'ok' &&
@@ -495,6 +688,13 @@ const EscapeTheCode = (function () {
               title: '✨ Spell Cast!',
               text: 'Your incantation worked perfectly — the quest advances!',
               icon: 'success',
+            });
+            ajax.fetchStory().then(() => {
+              vars.refreshNavOnly = true;
+              renderers.displayChapters();
+              setTimeout(() => {
+                vars.refreshNavOnly = false;
+              }, 1500);
             });
           } else {
             Swal.fire({
@@ -522,12 +722,10 @@ const EscapeTheCode = (function () {
         icon.classList.add('fa-spin');
 
         const response = await ajax.runSpell(code);
-        console.log('response', response);
 
         renderers.displaySpellOutput(id, response.results);
       } catch (error) {
         console.log(error);
-        alert('error');
       } finally {
         target.classList.remove('disabled');
         if (icon) {
@@ -552,7 +750,6 @@ const EscapeTheCode = (function () {
 
             //display response
             renderers.displayBoughtHints(response);
-            console.log('response', response);
             return response;
           } catch (error) {
             Swal.showValidationMessage(`Request failed: ${error}`);
@@ -561,7 +758,6 @@ const EscapeTheCode = (function () {
         allowOutsideClick: () => !Swal.isLoading(),
       })
         .then((result, response) => {
-          console.log(result, response);
           if (result.isConfirmed && result.value) {
             const data = result.value;
             if (data.alreadyUsed) {
@@ -595,6 +791,9 @@ const EscapeTheCode = (function () {
   EscapeTheCode.init = ({ container, apiUrl }) => {
     console.log('Init...', container, apiUrl);
 
+    vars.lastSelectedSectionId =
+      localStorage.getItem('lastSelectedSection') || '';
+
     const apiClient = axios.create({
       baseURL: apiUrl,
       timeout: 10000,
@@ -615,13 +814,7 @@ const EscapeTheCode = (function () {
     dom.sidenav = container.querySelector('.js-sidenav');
 
     dom.sidenav.innerHTML = '<li class="sidebar-header">Loading...</li>';
-
-    dom.btnLessonAccordion = container.querySelector(
-      '.js-btn-lesson-accordion',
-    );
-    dom.modeSelect = container.querySelector('#mode');
-    dom.sectionContent = container.querySelector('.section-content');
-    dom.sectionChallenge = container.querySelector('.section-challenge');
+    dom.mainContent = container.querySelector('.js-main-content');
     ajax.fetchStory().then(() => {
       renderers.displayChapters();
     });

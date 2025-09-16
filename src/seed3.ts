@@ -2450,19 +2450,21 @@ Remove the last item using \`pop()\`. Print the array that remains.
       ],
     };
 
-    const createChapter = async (chapter: Chapter) => {
+    const createChapter = async (chapter: Chapter, order: number) => {
       // INSERT CHAPTER 1
       await tx.insert(schema.chapters).values({
         title: chapter.title,
         storyId: story?.id,
         description: chapter.description,
         rewardOptions: COMMON_REWARD_OPTIONS,
+        order: order,
       });
 
       const createdChapter = await tx.query.chapters.findFirst({
         where: eq(schema.chapters.title, chapter.title),
       });
 
+      let sectionOrder = 1;
       for (const sec of chapter.sections) {
         await tx.insert(schema.sections).values({
           title: sec.title,
@@ -2471,7 +2473,9 @@ Remove the last item using \`pop()\`. Print the array that remains.
           rewardOptions: COMMON_REWARD_OPTIONS,
           runnables: JSON.stringify(sec.runnables),
           content: sec.content,
+          order: sectionOrder,
         });
+        sectionOrder++;
 
         const createdSection = await tx.query.sections.findFirst({
           where: eq(schema.sections.title, sec.title),
@@ -2504,8 +2508,10 @@ Remove the last item using \`pop()\`. Print the array that remains.
       }
     };
 
+    let chapterOrder = 1;
     for (const chapter of [chapter1, chapter2, chapter3]) {
-      await createChapter(chapter);
+      await createChapter(chapter, chapterOrder);
+      chapterOrder++;
       console.log('Seeding completed ' + chapter.title + '.');
     }
 
