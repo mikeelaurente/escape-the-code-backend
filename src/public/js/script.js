@@ -76,16 +76,7 @@ const EscapeTheCode = (function () {
           <div class="container-fluid p-0">
             <div class="d-flex justify-content-between">
               <h1 class="h3 mb-3 js-section-title"></h1>
-              <div class="mb-3 row">
-                <label for="mode" class="col-sm-3 col-form-label">Mode</label>
-                <div class="col-sm-9" >
-                  <select name="mode" id="mode" class="form-control js-mode">
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
-              </div>
+              
             </div>
 
           <div class="section">
@@ -130,6 +121,18 @@ const EscapeTheCode = (function () {
                   class="accordion-collapse collapse"
                 >
                   <div class="accordion-body">
+                    <div class="d-flex justify-content-center pb-2 mb-2 border-bottom border-2">
+                      <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+                        <input type="radio" value="easy" class="btn-check js-mode" name="mode" id="easy" autocomplete="off" checked>
+                        <label class="btn btn-outline-primary" for="easy">Easy</label>
+
+                        <input type="radio" value="medium" class="btn-check js-mode" name="mode" id="medium" autocomplete="off">
+                        <label class="btn btn-outline-primary" for="medium">Medium</label>
+
+                        <input type="radio" value="hard" class="btn-check js-mode" name="mode" id="hard" autocomplete="off">
+                        <label class="btn btn-outline-primary" for="hard">Hard</label>
+                      </div>
+                    </div>
                     <div class="section-challenge"></div>
                   </div>
                 </div>
@@ -157,7 +160,7 @@ const EscapeTheCode = (function () {
           }
           sectionItemsHTML += `
             <li class="sidebar-item js-sidenav-item">
-                <a href="#" data-chapter="${chapter.id}" 
+                <a data-chapter="${chapter.id}" 
                     data-id="${section.id}"
                     class="sidebar-link js-section js-sidenav-item" 
                 > ${iconHTML} ${section.title}</a>
@@ -219,6 +222,8 @@ const EscapeTheCode = (function () {
                 sideNavItemParent.click();
               }
             }
+          } else {
+            dom.sidenav.querySelector('.js-chapter').click();
           }
         }, 150);
       }, 50);
@@ -302,14 +307,19 @@ const EscapeTheCode = (function () {
         runnables = [];
       }
 
-      console.log(section);
-
       renderers.displaySectionRunnables(runnables);
+
+      const modeOptions = dom.mainContent.querySelectorAll('[name="mode"]');
+      console.log('modeOptions', modeOptions);
+      const difficulty = Array.prototype.filter
+        .call(modeOptions, (el) => el.checked)
+        .shift();
 
       // find the challenge with the correct mode
       const challenge = section.challenges.find(
-        (c) => c.difficulty == dom.modeSelect.value,
+        (c) => c.difficulty == difficulty.value,
       );
+      console.log('challege', difficulty, challenge, section.challenges);
       if (!challenge) {
         dom.sectionChallenge = '<h3>No challenge found</h3>';
       } else {
@@ -320,7 +330,7 @@ const EscapeTheCode = (function () {
     displayChallenge: (challenge) => {
       let html = `<h3>${challenge.title}</h3>`;
       html += `<div>${vars.converter.makeHtml(challenge.description)}</div>`;
-      html += `<pre id="editor" style='width: 100%; height: 300px;'></pre>`;
+      html += `<pre id="editor" style='width: 100%; height: 250px; border-radius: 5px;'></pre>`;
       // html += `<textarea id="challenge-answer" class="form-control" rows="5"></textarea>`;
       html += `<hr />`;
       html += `<div id="js-challenge-result"></div>`;
