@@ -32,6 +32,7 @@ export const creditUsage = mysqlTable('credit_usage', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
   challengeHintId: int('challengeHint_id').references(() => challengeHints.id),
+  challengeId: int('challenge_id').references(() => challenges.id),
   cost: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
@@ -177,6 +178,16 @@ export const creditsRelations = relations(userCredits, ({ one }) => ({
   }),
 }));
 
+export const challengeAnswersRelations = relations(
+  challengeAnswers,
+  ({ one }) => ({
+    challenge: one(challenges, {
+      fields: [challengeAnswers.challengeId],
+      references: [challenges.id],
+    }),
+  }),
+);
+
 export const storyRelations = relations(stories, ({ many }) => ({
   chapters: many(chapters),
   progress: many(storyProgress),
@@ -188,6 +199,7 @@ export const chapterRelations = relations(chapters, ({ many, one }) => ({
     references: [stories.id],
   }),
   sections: many(sections),
+  progress: many(storyProgress),
 }));
 
 export const sectionRelations = relations(sections, ({ one, many }) => ({
@@ -211,10 +223,34 @@ export const challengeRelations = relations(challenges, ({ one, many }) => ({
   hints: many(challengeHints),
 }));
 
+export const hintsRelations = relations(challengeHints, ({ one, many }) => ({
+  challenge: one(challenges, {
+    fields: [challengeHints.challengeId],
+    references: [challenges.id],
+  }),
+  creditUsage: one(creditUsage),
+}));
+
+export const creditUsageRelations = relations(creditUsage, ({ one, many }) => ({
+  hint: one(challengeHints, {
+    fields: [creditUsage.challengeHintId],
+    references: [challengeHints.id],
+  }),
+  creditUsage: one(creditUsage),
+}));
+
 export const storyProgressRelations = relations(storyProgress, ({ one }) => ({
   story: one(stories, {
     fields: [storyProgress.storyId],
     references: [stories.id],
+  }),
+  chapter: one(chapters, {
+    fields: [storyProgress.chapterId],
+    references: [chapters.id],
+  }),
+  section: one(sections, {
+    fields: [storyProgress.sectionId],
+    references: [sections.id],
   }),
 }));
 

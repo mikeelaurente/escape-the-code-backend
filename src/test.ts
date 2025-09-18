@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import * as schema from './db/schema';
-import { getStories } from './controllers/storyController';
+import { getStory } from './controllers/storyController';
 
 async function main() {
   const stories = await db().query.stories.findMany({

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import * as schema from '../db/schema';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { runWithDenoWindows, CodeTest } from '../runners/deno.runner';
 import { createSelectSchema } from 'drizzle-zod';
 import z from 'zod';
@@ -20,33 +20,131 @@ export const createStories = async (
   }
 };
 
-export const getStory = async (
+export const getStories = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const userId = Number(req.user?.id);
+    const userId = Number(req.session.userId);
     const story = await db().query.stories.findFirst({
       with: {
         progress: {
           where: eq(schema.storyProgress.userId, userId),
         },
         chapters: {
+          with: {
+            sections: {
+              with: {
+                challenges: true,
+              },
+              orderBy: asc(schema.sections.order),
+            },
+          },
           orderBy: asc(schema.chapters.order),
         },
       },
     });
 
     if (!story) {
-      return res.json({
-        status: 'not_found',
-        error: 'Story not found',
-      });
+      return res.json([]);
     }
 
-    const completedChapters = story.progress.map((p) => p.chapterId);
-    const response = {
+    type Section = typeof schema.sections.$inferInsert & {
+      locked: boolean;
+      completed: boolean;
+    };
+    type Chapter = typeof schema.chapters.$inferInsert & {
+      sections: Section[];
+    };
+    type Story = typeof schema.stories.$inferSelect & { chapters: Chapter[] };
+
+    const completedSections = story.progress.map((p) => p.sectionId);
+    const allSections: Section[] = story.chapters
+      .map((c) =>
+        c.sections.map((s) => ({
+          ...s,
+          locked: true,
+          completed: completedSections.includes(s.id),
+        })),
+      )
+      .flat();
+    const allChapters = story.chapters;
+
+    const completedSectionsWithDetails = story.progress.map((c) => {
+      const section = allSections.find((s) => s.id === c.sectionId);
+      if (section) {
+        const sectionDetails = section;
+        return {
+          progress: c,
+          details: sectionDetails,
+        };
+      }
+    });
+
+    let lastCompleted = completedSectionsWithDetails
+      .map((c) => Number(`${c?.details?.chapterId}.${c?.details?.order}`))
+      .reduce((a, b) => Math.max(a, b), 0);
+
+    let nextSectionChapter = story.chapters
+      .map((c) => c.id)
+      .reduceRight((a, b) => Math.min(a, b));
+    let nextSectionOrder = 1;
+    if (lastCompleted > 0) {
+      const sectionParts = lastCompleted.toString().split('.');
+      nextSectionChapter = Number(sectionParts[0]);
+      nextSectionOrder = Number(sectionParts[1]) + 1;
+      const chapter = allChapters.find((c) => c.id === nextSectionChapter);
+      if (chapter) {
+        if (chapter.sections.length <= nextSectionOrder) {
+          nextSectionOrder = 1;
+          nextSectionChapter += 1;
+        }
+      }
+    }
+
+    const nextSection = allSections.find((s) => {
+      return s.order == nextSectionOrder && s.chapterId == nextSectionChapter;
+    });
+
+    for (let section of Object.values(allSections)) {
+      if (
+        !(
+          nextSection &&
+          (Number(section.chapterId) > Number(nextSection.chapterId) ||
+            (nextSection.order < section.order &&
+              nextSection.chapterId == section.chapterId))
+        )
+      ) {
+        section.locked = false;
+      }
+    }
+
+    type StoryDto = {
+      id: Story['id'];
+      title: Story['title'];
+      description: Story['description'];
+      chapters: ChapterDto[];
+    };
+
+    type ChapterDto = {
+      id: Chapter['id'];
+      storyId: Chapter['storyId'];
+      order: Chapter['order'];
+      title: Chapter['title'];
+      sections: SectionDto[];
+    };
+
+    type SectionDto = {
+      id: Section['id'];
+      chapterId: Section['chapterId'];
+      order: Section['order'];
+      title: Section['title'];
+      locked: boolean;
+      completed: boolean;
+    };
+
+    const response: StoryDto = {
       id: story.id,
       title: story.title,
       description: story.description,
@@ -55,107 +153,31 @@ export const getStory = async (
         order: c.order,
         storyId: c.storyId,
         title: c.title,
-        locked:
-          completedChapters.length === 0
-            ? false
-            : !completedChapters.includes(c.id),
+        sections: c.sections.map((s): SectionDto => {
+          const modifiedSection = allSections.find((x) => x.id == s.id);
+          if (modifiedSection) {
+            return {
+              id: modifiedSection.id,
+              chapterId: modifiedSection.chapterId,
+              order: modifiedSection.order,
+              title: modifiedSection.title,
+              locked: modifiedSection.locked,
+              completed: modifiedSection.completed,
+            };
+          }
+          return {
+            id: s.id,
+            chapterId: s.chapterId,
+            order: s.order,
+            title: s.title,
+            locked: true,
+            completed: false,
+          };
+        }),
       })),
     };
 
     res.json(response);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getChapterSections = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = Number(req.user?.id);
-    const chapterId = Number(req.params.chapter);
-    const story = await db().query.stories.findFirst({});
-    const progress = await db().query.storyProgress.findMany({
-      where: and(
-        eq(schema.storyProgress.userId, userId),
-        eq(schema.storyProgress.storyId, Number(story?.id)),
-      ),
-      with: {
-        section: true,
-      },
-    });
-    const chapter = await db().query.chapters.findFirst({
-      where: eq(schema.chapters.id, chapterId),
-      with: {
-        sections: {
-          with: {
-            challenges: true,
-          },
-          orderBy: asc(schema.sections.order),
-        },
-      },
-    });
-
-    if (!chapter) {
-      return res.json({
-        status: 'not_found',
-        error: 'Chapter not found',
-      });
-    }
-
-    const completedSections = progress.map((p) => p.sectionId);
-
-    let lastCompleted = progress
-      .map((c) => Number(`${c?.section?.chapterId}.${c?.section?.order}`))
-      .reduce((a, b) => Math.max(a, b), 0);
-
-    // console.log('progress', progress);
-    console.log('lastCompleted', lastCompleted);
-
-    let nextSectionChapter = chapter.id + 1;
-    let nextSectionOrder = 1;
-
-    if (lastCompleted > 0) {
-      const sectionParts = lastCompleted.toString().split('.');
-      nextSectionChapter = Number(sectionParts[0]);
-      nextSectionOrder = Number(sectionParts[1]) + 1;
-      const searchedChapter =
-        chapter.id === nextSectionChapter ? chapter : null;
-      if (searchedChapter) {
-        if (searchedChapter.sections.length <= nextSectionOrder) {
-          nextSectionOrder = 1;
-          nextSectionChapter += 1;
-        }
-      }
-    }
-
-    const nextSection = chapter.sections.find((s) => {
-      return s.order == nextSectionOrder && s.chapterId == nextSectionChapter;
-    });
-
-    const allSections = chapter.sections.map((s) => {
-      const modifiedSection = {
-        ...s,
-        locked: true,
-        completed: completedSections.includes(s.id),
-      };
-
-      if (
-        (!nextSection && s.order == 1 && lastCompleted === 0) ||
-        (nextSection && s.order < nextSection.order)
-      ) {
-        modifiedSection.locked = false;
-      }
-
-      return modifiedSection;
-    });
-
-    res.json({
-      ...chapter,
-      sections: allSections,
-    });
   } catch (error) {
     next(error);
   }
@@ -191,7 +213,7 @@ export const getSection = async (
   next: NextFunction,
 ) => {
   const sectionId = parseInt(req.params.id || '');
-  const userId = Number(req.user?.id);
+  const userId = Number(req.session.userId);
 
   const section = await db().query.sections.findFirst({
     where: eq(schema.sections.id, sectionId),
@@ -205,34 +227,17 @@ export const getSection = async (
           rewardPoints: true,
           sectionID: true,
         },
-        with: {
-          answers: {
-            where: eq(schema.challengeAnswers.userId, userId),
-            columns: {
-              createdAt: true,
-              result: true,
-            },
-          },
-        },
+        // with: {
+        //   answers: {
+        //     where: eq(schema.challengeAnswers.userId, userId),
+        //     columns: {
+        //       createdAt: true,
+        //       result: true,
+        //     },
+        //   },
+        // },
       },
       storyProgress: true,
-    },
-  });
-
-  const challengeIds = section?.challenges.map((c) => Number(c.id)) ?? [];
-
-  const creditUsages = await db().query.creditUsage.findMany({
-    where: and(
-      inArray(schema.creditUsage.challengeId, challengeIds),
-      eq(schema.creditUsage.userId, userId),
-    ),
-    with: {
-      hint: {
-        columns: {
-          id: true,
-          hintText: true,
-        },
-      },
     },
   });
 
@@ -240,10 +245,7 @@ export const getSection = async (
     res.status(404).json({ message: 'Section not found' });
     return;
   }
-  res.json({
-    ...section,
-    creditUsages,
-  });
+  res.json(section);
 };
 
 export const buyHint = async (
@@ -252,14 +254,14 @@ export const buyHint = async (
   next: NextFunction,
 ) => {
   const hintId = req.body.hintId;
-  const currentUserId = Number(req.user?.id);
+  const currentUserId = Number(req.session.userId);
 
   const challengeHint = await db().query.challengeHints.findFirst({
     where: eq(schema.challengeHints.id, hintId),
   });
 
   if (!challengeHint) {
-    res.json({ status: 'error', message: 'Hint not found' });
+    res.status(404).json({ message: 'Hint not found' });
     return;
   }
 
@@ -272,7 +274,6 @@ export const buyHint = async (
 
   if (usedHint) {
     return res.json({
-      status: 'ok',
       alreadyUsed: true,
       hint: challengeHint,
     });
@@ -283,11 +284,11 @@ export const buyHint = async (
   });
 
   if (!userCredits) {
-    res.json({ status: 'error', message: 'Credits not found' });
+    res.status(404).json({ message: 'Credits not found' });
     return;
   }
   if (userCredits?.value < challengeHint.cost) {
-    res.json({ status: 'error', message: 'Not enough credits' });
+    res.status(404).json({ message: 'Not enough credits' });
     return;
   }
 
@@ -303,30 +304,12 @@ export const buyHint = async (
   await db().insert(schema.creditUsage).values({
     userId: currentUserId,
     challengeHintId: hintId,
-    challengeId: challengeHint.challengeId,
     cost: challengeHint.cost,
   });
 
-  const creditUsage = await db().query.creditUsage.findFirst({
-    where: and(
-      eq(schema.creditUsage.userId, currentUserId),
-      eq(schema.creditUsage.challengeHintId, challengeHint.id),
-    ),
-    with: {
-      hint: {
-        columns: {
-          id: true,
-          hintText: true,
-        },
-      },
-    },
-  });
-
   res.json({
-    status: 'ok',
     remainingCredits: newCredit,
     purchasedHint: challengeHint,
-    creditUsage,
   });
 };
 
@@ -337,7 +320,7 @@ export const submitAnswer = async (
 ) => {
   const challengeId = parseInt(req.params.id || '');
   const answer = decodeURIComponent(req.body.answer);
-  const userId = Number(req.user?.id);
+  const userId = Number(req.session.userId);
 
   const challenge = await db().query.challenges.findFirst({
     where: eq(schema.challenges.id, challengeId),

@@ -1,5 +1,5 @@
 @url=http://localhost:3000/api
-
+@accessToken={{login.response.body.$.data.accessToken}}
 
 POST {{url}}/runner/run
 Content-Type: application/json
@@ -7,3 +7,42 @@ Content-Type: application/json
 {
     "code": "Y29uc29sZS5sb2coIm1pa2VlIik7"
 }
+
+### Register
+# @name register
+POST {{url}}/auth/register
+Content-Type: application/json
+
+{
+    "email": "test10@mail.com",
+    "password": "password",
+    "firstName": "test1",
+    "lastName": "test1"
+}
+
+### Login
+# @name login
+POST {{url}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "test1@mail.com",
+    "password": "password"
+}
+
+### Get Story
+GET {{url}}/story
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+
+### Get Me
+GET {{url}}/auth/me
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+
+### Get Story
+GET {{url}}/story/chapters/6/sections
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}

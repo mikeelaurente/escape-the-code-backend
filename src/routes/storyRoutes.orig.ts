@@ -5,13 +5,11 @@ import {
   submitAnswer,
   buyHint,
   getSection,
-  getChapterSections,
 } from '../controllers/storyController';
 
 const router = Router();
 
 router.get('/', getStory);
-router.get('/chapters/:chapter/sections', getChapterSections);
 router.get('/challenges/:id/hints', getChallengeHints);
 router.post('/challenges/:id/answer', submitAnswer);
 router.post('/challenges/:id/buy-hint', buyHint);
