@@ -1,0 +1,59 @@
+
+@url=http://localhost:3000/api
+@accessToken={{login.response.body.$.data.accessToken}}
+
+### Login
+
+### Login
+# @name login
+POST {{url}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "test3@mail.com",
+    "password": "password"
+}
+
+
+### get('/story/'): Get Story
+GET {{url}}/story
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+
+#### get('/story/chapters/:chapter/sections')
+GET {{url}}/story/chapters/4/sections
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+# get('/story/challenges/:id/hints')
+# post('/story/challenges/:id/answer')
+# post('/story/challenges/:id/buy-hint')
+# get('/story/sections/:id')
+
+### Get NExt Section
+GET {{url}}/story/next-section
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+# ### Get Story
+# GET {{url}}/story/chapters/6/sections
+# Content-Type: application/json
+# Authorization: Bearer {{accessToken}}
+
+
+### Run Code
+POST {{url}}/runner/run
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "code": "Y29uc29sZS5sb2coIm1pa2VlIik7"
+}
+
+
+
+# ### Get Story
+# GET {{url}}/story
+# Content-Type: application/json
+# Authorization: Bearer {{accessToken}}

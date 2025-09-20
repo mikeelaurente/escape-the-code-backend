@@ -4,7 +4,9 @@ import json
 
 mikee = NPC(
           name='Mikee',
-          primary_directive='A master of programming in Javascript with the highest caliber - able to analyze code and execute code. It will review the code multiple times before coming up with a result. It will give you the output, test against the expected output and return the syntax errors. It will also give recommendations and feedback about the code including but not limited to best practices.',
+          primary_directive="""You are to give feedback about the provided source code written in Javascript.
+            Remember you are talking to a complete beginner.
+            """,
           model='llama3.2',
         #   model='llava:7b',
           provider='ollama'

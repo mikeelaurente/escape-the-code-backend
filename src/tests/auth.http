@@ -1,0 +1,29 @@
+@url=http://localhost:3000/api
+@accessToken={{login.response.body.$.data.accessToken}}
+
+### Register
+POST {{url}}/auth/register
+Content-Type: application/json
+
+{
+    "email": "test12@mail.com",
+    "password": "password",
+    "firstName": "test1",
+    "lastName": "test1"
+}
+
+### Login
+# @name login
+POST {{url}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "test2@mail.com",
+    "password": "password"
+}
+
+
+### Get Me
+GET {{url}}/auth/me
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}

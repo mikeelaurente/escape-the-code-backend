@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, InferSelectModel } from 'drizzle-orm';
 import {
   datetime,
   timestamp,
@@ -8,7 +8,7 @@ import {
   json,
   text,
 } from 'drizzle-orm/mysql-core';
-import { createInsertSchema } from 'drizzle-zod';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -104,7 +104,9 @@ export const chapters = mysqlTable('chapters', {
 
 export const sections = mysqlTable('sections', {
   id: int('id').autoincrement().primaryKey(),
-  chapterId: int('chapter_id').references(() => chapters.id),
+  chapterId: int('chapter_id')
+    .notNull()
+    .references(() => chapters.id),
   order: int().notNull(),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
@@ -255,3 +257,4 @@ export const storyProgressRelations = relations(storyProgress, ({ one }) => ({
 }));
 
 export const insertUserSchema = createInsertSchema(users);
+export type Section = typeof sections.$inferSelect;
