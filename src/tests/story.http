@@ -10,7 +10,7 @@ POST {{url}}/auth/login
 Content-Type: application/json
 
 {
-    "email": "test3@mail.com",
+    "email": "test2@mail.com",
     "password": "password"
 }
 
@@ -51,6 +51,11 @@ Authorization: Bearer {{accessToken}}
     "code": "Y29uc29sZS5sb2coIm1pa2VlIik7"
 }
 
+
+### Get Story Progress
+GET {{url}}/story/progress
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
 
 
 # ### Get Story

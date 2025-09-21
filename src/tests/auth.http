@@ -27,3 +27,15 @@ Content-Type: application/json
 GET {{url}}/auth/me
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
+
+
+### Update User
+POST {{url}}/users
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "firstName": "Firstname updated 1",
+    "lastName": "lastName updated",
+    "email": "test100@mail.com"
+}

@@ -5,3 +5,4 @@ export * from './submitAnswer.handler';
 export * from './buyHint.handler';
 export * from './getSection.handler';
 export * from './getNextSection.handler';
+export * from './getProgress.handler';

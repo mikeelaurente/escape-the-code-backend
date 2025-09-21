@@ -58,6 +58,8 @@ export const loginHandler = async (
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          avatar: user.photoUrl,
+          about: user.about,
         },
       },
     });

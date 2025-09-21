@@ -10,5 +10,6 @@ router.post('/challenges/:id/answer', handlers.submitAnswerHandler);
 router.post('/challenges/:id/buy-hint', handlers.buyHintHandler);
 router.get('/sections/:id', handlers.getSectionHandler);
 router.get('/next-section', handlers.getNextSectionHandler);
+router.get('/progress', handlers.getProgressHandler);
 
 export default router;

@@ -16,6 +16,8 @@ export const users = mysqlTable('users', {
   hashedPassword: varchar({ length: 255 }),
   firstName: varchar({ length: 255 }).notNull(),
   lastName: varchar({ length: 255 }).notNull(),
+  about: text(),
+  photoUrl: varchar({ length: 255 }).default('user.png'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -42,6 +44,9 @@ export const achievements = mysqlTable('achievements', {
   id: int('id').autoincrement().primaryKey(),
   title: varchar({ length: 255 }).notNull().unique(),
   description: varchar({ length: 1024 }).notNull(),
+  difficulty: varchar({ length: 30 })
+    .notNull()
+    .$type<'easy' | 'medium' | 'hard'>(),
   rewardPoints: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
@@ -112,6 +117,8 @@ export const sections = mysqlTable('sections', {
   description: varchar({ length: 2048 }).notNull(),
   content: text('content').notNull(),
   runnables: varchar({ length: 2048 }).notNull(),
+  trivias: text(),
+  additionalResources: text(),
   rewardOptions: json('reward_options')
     .$type<{
       easy: number;

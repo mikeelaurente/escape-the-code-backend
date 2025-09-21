@@ -109,20 +109,20 @@ export const submitAnswerHandler = async (
       });
     }
 
-    feedback = await generateFeedback(`
-      Respond in HTML (wrap in div, don't markdown):
-      CHALLENGE GIVEN: ${challenge?.description}
-      DIFFICULTY: ${challenge?.difficulty}
-      USER CODE: ${answer}
-      USER CODE RESULT: ${JSON.stringify(runnerResponse)}  
+    // feedback = await generateFeedback(`
+    //   Respond in HTML (wrap in div, don't markdown):
+    //   CHALLENGE GIVEN: ${challenge?.description}
+    //   DIFFICULTY: ${challenge?.difficulty}
+    //   USER CODE: ${answer}
+    //   USER CODE RESULT: ${JSON.stringify(runnerResponse)}
 
-      Response:
-      1. Code Review
-      2. Code Improvements
-      3. Best Practices
-      4. Additional Resources
-      5. Trivia
-    `);
+    //   Response:
+    //   1. Code Review
+    //   2. Code Improvements
+    //   3. Best Practices
+    //   4. Additional Resources
+    //   5. Trivia
+    // `);
 
     nextSection = await getNextSectionFor(userId);
   }
