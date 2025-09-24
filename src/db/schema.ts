@@ -1,4 +1,5 @@
 import { relations, InferSelectModel } from 'drizzle-orm';
+import { tinyint } from 'drizzle-orm/mysql-core';
 import {
   datetime,
   timestamp,
@@ -141,23 +142,55 @@ export const challenges = mysqlTable('challenges', {
   moduleType: varchar({ length: 100 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   difficulty: varchar({ length: 50 }).notNull(),
+  durationLimitMinutes: int('duration_limit_minutes', {
+    unsigned: true,
+  }).default(0),
   expectedOutput: varchar({ length: 2048 }).notNull(),
   rewardPoints: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
+export enum ChallengeStatus {
+  Ongoing = 0,
+  Completed = 1,
+  Cancelled = 2,
+  Expired = 3,
+  Skipped = 4,
+}
+
 export const challengeAnswers = mysqlTable('challenge_answers', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
   challengeId: int('challenge_id').references(() => challenges.id),
-  code: text().notNull(),
-  result: text().notNull(),
-  metadata: text(),
-  codeOutput: text(),
+  durationLimitMinutes: int('duration_limit_minutes', {
+    unsigned: true,
+  }).default(0),
+  feedback: text(),
+  status: tinyint('status', { unsigned: true })
+    .default(ChallengeStatus.Ongoing)
+    .$type<ChallengeStatus>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  completedAt: timestamp('completed_at'),
+  cancelledAt: timestamp('cancelled_at'),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
+
+export const challengeAnswerSubmissions = mysqlTable(
+  'challenge_answer_submissions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    userId: int('user_id').references(() => users.id),
+    challengeId: int('challenge_id').references(() => challenges.id),
+    challengeAnswerId: int('answer_id').references(() => challengeAnswers.id),
+    code: text().notNull(),
+    result: text().notNull().$type<'passed' | 'failed'>(),
+    metadata: text(),
+    codeOutput: text(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  },
+);
 
 export const challengeHints = mysqlTable('challenge_hints', {
   id: int('id').autoincrement().primaryKey(),
@@ -189,10 +222,24 @@ export const creditsRelations = relations(userCredits, ({ one }) => ({
 
 export const challengeAnswersRelations = relations(
   challengeAnswers,
-  ({ one }) => ({
+  ({ one, many }) => ({
     challenge: one(challenges, {
       fields: [challengeAnswers.challengeId],
       references: [challenges.id],
+    }),
+    submissions: many(challengeAnswerSubmissions),
+  }),
+);
+export const challengeAnswerSubmissionsRelations = relations(
+  challengeAnswerSubmissions,
+  ({ one, many }) => ({
+    challenge: one(challenges, {
+      fields: [challengeAnswerSubmissions.challengeId],
+      references: [challenges.id],
+    }),
+    challengeAnswer: one(challengeAnswers, {
+      fields: [challengeAnswerSubmissions.challengeAnswerId],
+      references: [challengeAnswers.id],
     }),
   }),
 );

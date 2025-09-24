@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { CodeTest, runWithDenoWindows } from '../../../runners/deno.runner';
-import * as storySchema from '../story.schema';
+import * as challengesSchema from '../challenges.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { generateFeedback } from '../../../feedback';
@@ -13,9 +13,8 @@ export const submitAnswerHandler = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const validationResult = await storySchema.submitAnswerSchema.safeParseAsync(
-    req.body,
-  );
+  const validationResult =
+    await challengesSchema.submitAnswerSchema.safeParseAsync(req.body);
 
   if (!validationResult.success) {
     return res.json({
@@ -29,7 +28,46 @@ export const submitAnswerHandler = async (
 
   const challenge = await db.query.challenges.findFirst({
     where: eq(schema.challenges.id, challengeId),
+    with: {
+      answers: {
+        with: {
+          submissions: {
+            where: eq(schema.challengeAnswerSubmissions.result, 'passed'),
+          },
+        },
+        where: and(
+          eq(schema.challengeAnswers.userId, userId),
+          eq(schema.challengeAnswers.status, schema.ChallengeStatus.Ongoing),
+        ),
+      },
+    },
   });
+
+  if (!challenge) {
+    return res.json({
+      status: 'error',
+      code: 'challenge_not_found',
+      message: 'Challenge not found',
+    });
+  }
+
+  const firstAnswer = challenge.answers[0];
+  if (!firstAnswer) {
+    return res.json({
+      status: 'error',
+      code: 'challenge_not_started',
+      message: 'Challenge not started',
+    });
+  }
+
+  const successfulSubmission = firstAnswer.submissions[0];
+  if (successfulSubmission) {
+    return res.json({
+      status: 'error',
+      code: 'challenge_already_solved',
+      message: 'You have already solved this challenge',
+    });
+  }
 
   const codeTests = JSON.parse(challenge?.expectedOutput || '[]') as CodeTest[];
 
@@ -63,73 +101,39 @@ export const submitAnswerHandler = async (
     codeOutput = runnerResponse.detail || 'syntax error';
   }
 
-  await db.insert(schema.challengeAnswers).values({
+  await db.insert(schema.challengeAnswerSubmissions).values({
     userId,
     challengeId,
+    challengeAnswerId: firstAnswer.id,
     code: answer,
     result: passed ? 'passed' : 'failed',
     metadata: JSON.stringify(runnerResponse),
     codeOutput,
   });
 
-  let nextSection = null;
-  let feedback = null;
-
-  if (passed) {
-    const challengeWithDetails = await db.query.challenges.findFirst({
-      where: eq(schema.challenges.id, challengeId),
-      with: {
-        section: {
-          with: {
-            chapter: {
-              with: {
-                story: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    // check if already inserted to story progress
-    const inserted = await db.query.storyProgress.findFirst({
+  const submittedResponse = await db.query.challengeAnswerSubmissions.findFirst(
+    {
       where: and(
-        eq(schema.storyProgress.userId, userId),
-        eq(
-          schema.storyProgress.sectionId,
-          Number(challengeWithDetails?.sectionID),
-        ),
+        eq(schema.challengeAnswerSubmissions.userId, userId),
+        eq(schema.challengeAnswerSubmissions.challengeAnswerId, firstAnswer.id),
       ),
-    });
-    if (!inserted) {
-      await db.insert(schema.storyProgress).values({
-        storyId: challengeWithDetails?.section?.chapter?.storyId,
-        chapterId: challengeWithDetails?.section?.chapterId,
-        sectionId: challengeWithDetails?.sectionID,
-        userId,
-      });
-    }
+      orderBy: desc(schema.challengeAnswerSubmissions.id),
+    },
+  );
 
-    // feedback = await generateFeedback(`
-    //   Respond in HTML (wrap in div, don't markdown):
-    //   CHALLENGE GIVEN: ${challenge?.description}
-    //   DIFFICULTY: ${challenge?.difficulty}
-    //   USER CODE: ${answer}
-    //   USER CODE RESULT: ${JSON.stringify(runnerResponse)}
-
-    //   Response:
-    //   1. Code Review
-    //   2. Code Improvements
-    //   3. Best Practices
-    //   4. Additional Resources
-    //   5. Trivia
-    // `);
-
-    nextSection = await getNextSectionFor(userId);
-  }
+  (firstAnswer as any).submission = {
+    id: submittedResponse?.id,
+    result: submittedResponse?.result,
+    code: submittedResponse?.code,
+    codeOutput: submittedResponse?.codeOutput,
+    metadata: JSON.parse(submittedResponse?.metadata || ''),
+  };
 
   res.json({
-    ...runnerResponse,
-    nextSection,
-    feedback,
+    status: 'ok',
+    data: {
+      result: passed ? 'solved' : 'ongoing',
+      ongoingAnswer: firstAnswer,
+    },
   });
 };

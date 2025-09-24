@@ -4,6 +4,7 @@ import * as schema from '../../../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
+import { title } from 'process';
 
 export const getSectionHandler = async (
   req: Request,
@@ -38,7 +39,20 @@ export const getSectionHandler = async (
             where: eq(schema.challengeAnswers.userId, userId),
             columns: {
               createdAt: true,
-              result: true,
+              completedAt: true,
+              feedback: true,
+              status: true,
+            },
+            with: {
+              submissions: {
+                columns: {
+                  id: true,
+                  result: true,
+                  code: true,
+                  codeOutput: true,
+                  metadata: true,
+                },
+              },
             },
           },
         },
@@ -77,11 +91,66 @@ export const getSectionHandler = async (
     },
   });
 
+  let nextSection = null;
+
+  for (let challenge of selectedSection.challenges) {
+    let challengeStatus = 'none';
+    if (
+      challenge.answers.find(
+        (x) =>
+          x.status === schema.ChallengeStatus.Ongoing &&
+          x.submissions.some((y) => y.result === 'passed'),
+      )
+    ) {
+      challengeStatus = 'solved';
+      const ongoingAnswer = challenge.answers.find(
+        (x) => x.status === schema.ChallengeStatus.Ongoing,
+      );
+
+      const successfulSubmission = ongoingAnswer?.submissions.find(
+        (x) => x.result === 'passed',
+      );
+      (ongoingAnswer as any).submission = {
+        ...successfulSubmission,
+        metadata: JSON.parse(successfulSubmission?.metadata || ''),
+      };
+      (challenge as any).ongoingAnswer = ongoingAnswer;
+    } else if (
+      challenge.answers.find(
+        (x) => x.status === schema.ChallengeStatus.Completed,
+      )
+    ) {
+      challengeStatus = 'completed';
+      const acceptedAnswer = challenge.answers.find(
+        (x) => x.status === schema.ChallengeStatus.Completed,
+      );
+
+      const successfulSubmission = acceptedAnswer?.submissions.find(
+        (x) => x.result === 'passed',
+      );
+      (acceptedAnswer as any).submission = successfulSubmission;
+      (challenge as any).acceptedAnswer = acceptedAnswer;
+
+      nextSection = await getNextSectionFor(userId);
+    } else if (
+      challenge.answers.find((x) => x.status === schema.ChallengeStatus.Ongoing)
+    ) {
+      challengeStatus = 'ongoing';
+    }
+
+    (challenge as any).status = challengeStatus;
+  }
+
   res.json({
     status: 'ok',
     data: {
       ...selectedSection,
       creditUsages,
+      nextSection: nextSection && {
+        id: nextSection.id,
+        chapterId: nextSection.chapterId,
+        title: nextSection.title,
+      },
     },
   });
 };
