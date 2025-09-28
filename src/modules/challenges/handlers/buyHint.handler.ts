@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { and, eq } from 'drizzle-orm';
+import { updateUserBalance } from '../../../db/repositories/user.repository';
 
 export const buyHintHandler = async (
   req: Request,
@@ -20,10 +21,10 @@ export const buyHintHandler = async (
     return;
   }
 
-  const usedHint = await db.query.creditUsage.findFirst({
+  const usedHint = await db.query.hintUsages.findFirst({
     where: and(
-      eq(schema.creditUsage.userId, currentUserId),
-      eq(schema.creditUsage.challengeHintId, hintId),
+      eq(schema.hintUsages.userId, currentUserId),
+      eq(schema.hintUsages.challengeHintId, hintId),
     ),
   });
 
@@ -35,39 +36,33 @@ export const buyHintHandler = async (
     });
   }
 
-  const userCredits = await db.query.userCredits.findFirst({
-    where: eq(schema.userCredits.userId, currentUserId),
+  await updateUserBalance(currentUserId);
+  const currentUser = await db.query.users.findFirst({
+    where: eq(schema.users.id, currentUserId),
   });
-
-  if (!userCredits) {
-    res.json({ status: 'error', message: 'Credits not found' });
-    return;
+  if (!currentUser) {
+    return res.json({
+      status: 'error',
+      message: 'User not found',
+    });
   }
-  if (userCredits?.value < challengeHint.cost) {
+
+  if (currentUser.credits < challengeHint.cost) {
     res.json({ status: 'error', message: 'Not enough credits' });
     return;
   }
 
-  const newCredit = userCredits?.value - challengeHint.cost;
-
-  await db
-    .update(schema.userCredits)
-    .set({
-      value: newCredit,
-    })
-    .where(eq(schema.userCredits.userId, currentUserId));
-
-  await db.insert(schema.creditUsage).values({
+  await db.insert(schema.hintUsages).values({
     userId: currentUserId,
     challengeHintId: hintId,
     challengeId: challengeHint.challengeId,
     cost: challengeHint.cost,
   });
 
-  const creditUsage = await db.query.creditUsage.findFirst({
+  const creditUsage = await db.query.hintUsages.findFirst({
     where: and(
-      eq(schema.creditUsage.userId, currentUserId),
-      eq(schema.creditUsage.challengeHintId, challengeHint.id),
+      eq(schema.hintUsages.userId, currentUserId),
+      eq(schema.hintUsages.challengeHintId, challengeHint.id),
     ),
     with: {
       hint: {
@@ -79,9 +74,24 @@ export const buyHintHandler = async (
     },
   });
 
+  await db.insert(schema.creditTransactions).values({
+    amount: Number(creditUsage?.cost),
+    title: 'Buy Hint: ' + challengeHint.displayText,
+    type: 'out',
+    group: 'hint',
+    referenceId: creditUsage?.id,
+    userId: currentUserId,
+  });
+
+  await updateUserBalance(currentUser.id);
+
+  const updatedUser = await db.query.users.findFirst({
+    where: eq(schema.users.id, currentUserId),
+  });
+
   res.json({
     status: 'ok',
-    remainingCredits: newCredit,
+    remainingCredits: updatedUser?.credits,
     purchasedHint: challengeHint,
     creditUsage,
   });

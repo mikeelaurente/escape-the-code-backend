@@ -9,7 +9,7 @@ import {
   json,
   text,
 } from 'drizzle-orm/mysql-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { createInsertSchema } from 'drizzle-zod';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -17,26 +17,31 @@ export const users = mysqlTable('users', {
   hashedPassword: varchar({ length: 255 }),
   firstName: varchar({ length: 255 }).notNull(),
   lastName: varchar({ length: 255 }).notNull(),
+  credits: int().notNull().default(0),
   about: text(),
   photoUrl: varchar({ length: 255 }).default('user.png'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export const userCredits = mysqlTable('user_credits', {
-  id: int('id').autoincrement().primaryKey(),
-  userId: int('user_id').references(() => users.id),
-  value: int().notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
-});
-
-export const creditUsage = mysqlTable('credit_usage', {
+export const hintUsages = mysqlTable('hint_usages', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
   challengeHintId: int('challengeHint_id').references(() => challengeHints.id),
   challengeId: int('challenge_id').references(() => challenges.id),
   cost: int().notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+});
+
+export const creditTransactions = mysqlTable('credit_transactions', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').references(() => users.id),
+  title: varchar({ length: 255 }).notNull(),
+  type: varchar({ length: 30 }).notNull().$type<'in' | 'out'>(),
+  referenceId: int('reference_id'),
+  group: varchar({ length: 30 }).$type<'hint' | 'reward'>(),
+  amount: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -95,17 +100,8 @@ export const chapters = mysqlTable('chapters', {
   order: int().notNull(),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
-  rewardOptions: json('reward_options')
-    .$type<{
-      easy: number;
-      medium: number;
-      hard: number;
-    }>()
-    .$default(() => ({
-      easy: 10,
-      medium: 20,
-      hard: 30,
-    })),
+  rewardPoints: int().default(0),
+  creditPoints: int().default(0),
 });
 
 export const sections = mysqlTable('sections', {
@@ -113,24 +109,15 @@ export const sections = mysqlTable('sections', {
   chapterId: int('chapter_id')
     .notNull()
     .references(() => chapters.id),
-  order: int().notNull(),
+  order: int('order').notNull(),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   content: text('content').notNull(),
   runnables: varchar({ length: 2048 }).notNull(),
   trivias: text(),
-  additionalResources: text(),
-  rewardOptions: json('reward_options')
-    .$type<{
-      easy: number;
-      medium: number;
-      hard: number;
-    }>()
-    .$default(() => ({
-      easy: 10,
-      medium: 20,
-      hard: 30,
-    })),
+  additionalResources: text('additional_resources'),
+  rewardPoints: int('reward_points').default(0),
+  creditPoints: int('credit_points').default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -139,6 +126,7 @@ export const challenges = mysqlTable('challenges', {
   id: int('id').autoincrement().primaryKey(),
   sectionID: int('section_id').references(() => sections.id),
   title: varchar({ length: 255 }).notNull().unique(),
+  order: int().default(0),
   moduleType: varchar({ length: 100 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   difficulty: varchar({ length: 50 }).notNull(),
@@ -146,6 +134,7 @@ export const challenges = mysqlTable('challenges', {
     unsigned: true,
   }).default(0),
   expectedOutput: varchar({ length: 2048 }).notNull(),
+  creditPoints: int().notNull(),
   rewardPoints: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
@@ -170,6 +159,8 @@ export const challengeAnswers = mysqlTable('challenge_answers', {
   status: tinyint('status', { unsigned: true })
     .default(ChallengeStatus.Ongoing)
     .$type<ChallengeStatus>(),
+  creditPoints: int().default(0),
+  rewardPoints: int().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   completedAt: timestamp('completed_at'),
   cancelledAt: timestamp('cancelled_at'),
@@ -203,21 +194,10 @@ export const challengeHints = mysqlTable('challenge_hints', {
 });
 
 export const userRelations = relations(users, ({ one, many }) => ({
-  credits: one(userCredits, {
-    fields: [users.id],
-    references: [userCredits.userId],
-  }),
-  creditUsage: many(creditUsage),
+  creditUsage: many(hintUsages),
   achievements: many(userAchievements),
   storyProgress: many(storyProgress),
   challengeAnswers: many(challengeAnswers),
-}));
-
-export const creditsRelations = relations(userCredits, ({ one }) => ({
-  user: one(users, {
-    fields: [userCredits.userId],
-    references: [users.id],
-  }),
 }));
 
 export const challengeAnswersRelations = relations(
@@ -284,15 +264,15 @@ export const hintsRelations = relations(challengeHints, ({ one, many }) => ({
     fields: [challengeHints.challengeId],
     references: [challenges.id],
   }),
-  creditUsage: one(creditUsage),
+  creditUsage: one(hintUsages),
 }));
 
-export const creditUsageRelations = relations(creditUsage, ({ one, many }) => ({
+export const creditUsageRelations = relations(hintUsages, ({ one, many }) => ({
   hint: one(challengeHints, {
-    fields: [creditUsage.challengeHintId],
+    fields: [hintUsages.challengeHintId],
     references: [challengeHints.id],
   }),
-  creditUsage: one(creditUsage),
+  creditUsage: one(hintUsages),
 }));
 
 export const storyProgressRelations = relations(storyProgress, ({ one }) => ({

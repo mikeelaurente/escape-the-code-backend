@@ -59,7 +59,6 @@ export const getChapterSectionsHandler = async (
         locked: modifiedSection.locked,
         completed: modifiedSection.completed,
         description: modifiedSection.description,
-        rewardOptions: modifiedSection.rewardOptions,
       };
     });
 

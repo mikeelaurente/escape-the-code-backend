@@ -85,6 +85,7 @@ export const startChallengeHandler = async (
     challengeId: challenge.id,
     userId: userId,
     durationLimitMinutes: challenge.durationLimitMinutes,
+    createdAt: new Date(),
     status: schema.ChallengeStatus.Ongoing,
   });
 

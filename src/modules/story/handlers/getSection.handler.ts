@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
 import { title } from 'process';
@@ -30,6 +30,7 @@ export const getSectionHandler = async (
           id: true,
           title: true,
           description: true,
+          order: true,
           difficulty: true,
           rewardPoints: true,
           sectionID: true,
@@ -42,6 +43,11 @@ export const getSectionHandler = async (
               completedAt: true,
               feedback: true,
               status: true,
+            },
+            extras: {
+              duration: sql`TIMESTAMPDIFF(SECOND, created_at, completed_at)`.as(
+                'duration',
+              ),
             },
             with: {
               submissions: {
@@ -76,10 +82,10 @@ export const getSectionHandler = async (
   const challengeIds =
     selectedSection?.challenges.map((c) => Number(c.id)) ?? [];
 
-  const creditUsages = await db.query.creditUsage.findMany({
+  const creditUsages = await db.query.hintUsages.findMany({
     where: and(
-      inArray(schema.creditUsage.challengeId, challengeIds),
-      eq(schema.creditUsage.userId, userId),
+      inArray(schema.hintUsages.challengeId, challengeIds),
+      eq(schema.hintUsages.userId, userId),
     ),
     with: {
       hint: {

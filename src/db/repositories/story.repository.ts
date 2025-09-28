@@ -12,7 +12,8 @@ export const getNextSectionFor = async (studentId: number) => {
             s.description,
             s.content,
             s.runnables,
-            s.reward_options
+            s.reward_points as rewardPoints,
+            s.credit_points as creditPoints
         FROM sections s
             JOIN chapters c ON s.chapter_id = c.id
             LEFT JOIN story_progress sp ON s.id = sp.section_id

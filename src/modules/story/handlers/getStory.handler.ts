@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
+import { getUserRanking } from '../../../db/repositories/user.repository';
 
 export const getStoryHandler = async (
   req: Request,
@@ -22,14 +23,6 @@ export const getStoryHandler = async (
               columns: {
                 id: true,
               },
-              with: {
-                storyProgress: {
-                  columns: {
-                    id: true,
-                    createdAt: true,
-                  },
-                },
-              },
             },
           },
           orderBy: asc(schema.chapters.order),
@@ -44,6 +37,15 @@ export const getStoryHandler = async (
       });
     }
 
+    story.chapters.forEach((chapter) => {
+      chapter.sections.forEach((section) => {
+        (section as any).storyProgress = story.progress
+          .filter((p) => p.sectionId == section.id)
+          .map((sp) => ({ id: sp.id, createdAt: sp.createdAt }))
+          .shift();
+      });
+    });
+
     const assignedSection = await getNextSectionFor(userId);
 
     const response = {
@@ -57,7 +59,6 @@ export const getStoryHandler = async (
         storyId: c.storyId,
         title: c.title,
         sections: c.sections,
-        rewardOptions: c.rewardOptions,
         completed: c.id < assignedSection.chapterId,
         locked: c.id > assignedSection.chapterId,
       })),

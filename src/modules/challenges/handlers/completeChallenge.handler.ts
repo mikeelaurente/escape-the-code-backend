@@ -1,16 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
-import dayjs from 'dayjs';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { generateFeedback } from '../../../feedback';
+import { updateUserBalance } from '../../../db/repositories/user.repository';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 
 export const completeChallengeHandler = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
+  dayjs.extend(utc);
   const challengeId = parseInt(req.params.id || '');
   const userId = Number(req.user?.id);
 
@@ -90,6 +93,16 @@ export const completeChallengeHandler = async (
     });
   }
 
+  await db
+    .update(schema.challengeAnswers)
+    .set({
+      completedAt: new Date(),
+      status: schema.ChallengeStatus.Completed,
+      rewardPoints: challenge.rewardPoints,
+      creditPoints: challenge.creditPoints,
+    })
+    .where(eq(schema.challengeAnswers.id, activeAnswer.id));
+
   feedback = await generateFeedback(`
       Respond in HTML (wrap in div, don't markdown):
       CHALLENGE GIVEN: ${challenge.description}
@@ -110,15 +123,28 @@ export const completeChallengeHandler = async (
   await db
     .update(schema.challengeAnswers)
     .set({
-      completedAt: new Date(),
       feedback: feedback,
-      status: schema.ChallengeStatus.Completed,
     })
     .where(eq(schema.challengeAnswers.id, activeAnswer.id));
 
   const updatedAnswer = await db.query.challengeAnswers.findFirst({
     where: eq(schema.challengeAnswers.id, activeAnswer.id),
+    extras: {
+      duration: sql`TIMESTAMPDIFF(SECOND, created_at, completed_at)`.as(
+        'duration',
+      ),
+    },
   });
+
+  await db.insert(schema.creditTransactions).values({
+    amount: Number(updatedAnswer?.creditPoints),
+    title: 'Reward: ' + challenge.title,
+    type: 'in',
+    group: 'reward',
+    userId: userId,
+  });
+
+  await updateUserBalance(userId);
 
   let challengeStatus = 'none';
   switch (updatedAnswer?.status) {
@@ -140,6 +166,7 @@ export const completeChallengeHandler = async (
         feedback: updatedAnswer?.feedback,
         startedAt: updatedAnswer?.createdAt,
         completedAt: updatedAnswer?.completedAt,
+        duration: updatedAnswer?.duration,
         status: challengeStatus,
       },
     },
