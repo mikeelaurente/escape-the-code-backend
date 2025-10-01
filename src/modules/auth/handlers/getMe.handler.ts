@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { eq } from 'drizzle-orm';
+import { resolveAvatar, resolveBanner } from '../../../helpers/image.helper';
 
 export const getMeHandler = async (
   req: Request,
@@ -28,7 +29,8 @@ export const getMeHandler = async (
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        avatar: user.photoUrl,
+        avatar: resolveAvatar(user.photoUrl || ''),
+        banner: resolveBanner(user.bannerUrl || ''),
         about: user.about,
       },
     },

@@ -2,16 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import { eq } from 'drizzle-orm';
 import * as schema from '../../../db/schema';
-import { resolveAvatar } from '../../../helpers/image.helper';
+import { resolveBanner } from '../../../helpers/image.helper';
 
-export const updateAvatarHandler = async (
+export const updateBannerHandler = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const userId = Number(req.user?.id);
-    const avatar = req.file;
+    const banner = req.file;
 
     const user = await db.query.users.findFirst({
       where: eq(schema.users.id, userId),
@@ -27,15 +27,15 @@ export const updateAvatarHandler = async (
     const result = await db
       .update(schema.users)
       .set({
-        photoUrl: avatar?.filename,
+        bannerUrl: banner?.filename,
       })
       .where(eq(schema.users.id, userId));
 
     return res.json({
       status: 'ok',
-      message: 'Profile photo has been updated successfully',
+      message: 'Banner has been updated successfully',
       data: {
-        avatar: resolveAvatar(avatar?.filename || 'user.png'),
+        banner: resolveBanner(banner?.filename || 'banner.png'),
       },
     });
   } catch (e) {

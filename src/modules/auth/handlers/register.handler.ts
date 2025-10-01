@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import * as authSchema from '../auth.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
+import { Mailer } from '../../../services/mailer.service';
+import randomstring from 'randomstring';
 
 export const registerHandler = async (
   req: Request,
@@ -31,7 +33,8 @@ export const registerHandler = async (
 
     if (existingUser) {
       return res.json({
-        status: 'conflict',
+        status: 'error',
+        code: 'email_taken',
         error: 'Email is already registered',
       });
     }
@@ -40,16 +43,35 @@ export const registerHandler = async (
 
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const verificationToken = randomstring.generate({
+      length: 50,
+    });
+
     await db.insert(schema.users).values({
       email,
       hashedPassword,
       firstName,
       lastName,
+      verificationToken,
+      verified: schema.VerificationStatus.NotVerified,
     });
+
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.email, email),
+    });
+
+    if (!user) {
+      return res.json({
+        status: 'error',
+        message: 'Registration failed.',
+      });
+    }
+
+    await Mailer.sendVerificationEmail(user);
 
     return res.json({
       status: 'ok',
-      message: 'You are now registered!',
+      message: 'Please check your email to verify your account',
     });
   } catch (error) {
     next(error);

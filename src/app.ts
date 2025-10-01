@@ -9,6 +9,9 @@ import { errorHandler } from './middlewares/errorHandler';
 import path from 'path';
 import { isAuthenticated } from './middlewares/isAuthenticated';
 import cors from 'cors';
+import { setRootPath } from './helpers/template.helper';
+
+setRootPath(__dirname);
 
 const app = express();
 

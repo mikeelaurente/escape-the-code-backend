@@ -20,6 +20,12 @@ export const users = mysqlTable('users', {
   credits: int().notNull().default(0),
   about: text(),
   photoUrl: varchar({ length: 255 }).default('user.png'),
+  verified: tinyint('verified', { unsigned: true }).default(0),
+  verificationToken: varchar('verification_token', { length: 200 }).unique(),
+  verifiedAt: timestamp('verified_at'),
+  passwordResetToken: varchar('password_reset_token', { length: 200 }),
+  passwordResetExpiration: timestamp('password_reset_expiration'),
+  bannerUrl: varchar({ length: 255 }).default('banner.png'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -292,3 +298,9 @@ export const storyProgressRelations = relations(storyProgress, ({ one }) => ({
 
 export const insertUserSchema = createInsertSchema(users);
 export type Section = typeof sections.$inferSelect;
+export type User = typeof users.$inferSelect;
+
+export enum VerificationStatus {
+  NotVerified = 0,
+  Verified = 1,
+}

@@ -16,6 +16,7 @@ async function main() {
     await tx.delete(schema.achievements);
     await tx.delete(schema.challengeHints);
     await tx.delete(schema.storyProgress);
+    await tx.delete(schema.challengeAnswerSubmissions);
     await tx.delete(schema.challengeAnswers);
     await tx.delete(schema.storyProgress);
     await tx.delete(schema.challenges);
@@ -62,6 +63,8 @@ async function main() {
         hashedPassword,
         firstName: `Firstname${i}`,
         lastName: `Lastame${i}`,
+        verified: schema.VerificationStatus.Verified,
+        verifiedAt: new Date(),
       });
 
       const currentUser = await tx.query.users.findFirst({
@@ -1199,6 +1202,1178 @@ If it is empty, show nothing (empty line).</p>`.trim(),
       creditPoints: 20,
     };
 
+    /* ----------------- Chapter 2 ----------------- */
+    const chapter2: Chapter = {
+      rewardPoints: 60,
+      creditPoints: 16,
+      title: 'Chapter 2 — Pockets, Paths, and Choices',
+      description:
+        'Zia and Pax discover satchels where numbers and words can be stored—variables! They learn comparisons and booleans, then use if-statements to make choices. Everything is paced for beginners.',
+      sections: [
+        // S2.1 VARIABLES
+        {
+          title: 'S2.1 — Little Pockets (Variables)',
+          description:
+            'Variables are pockets for values. Use let for changeable values and const for steady ones. Names should be short and clear. Print what’s inside to see the value.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>In the Pack Square, the Pouch Maker hands Zia tiny pockets labeled with names. Pax practices placing numbers and words into pockets and showing them on the screen.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>Create a changeable pocket: <code>let name = 'Zia';</code></li>
+    <li>Create a steady pocket: <code>const city = 'Codeville';</code></li>
+    <li>Print what’s inside: <code>console.log(name);</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — make a pocket',
+              code: "let name = 'Zia'; console.log(name);",
+            },
+            {
+              title: 'Spell 2 — steady pocket',
+              code: "const city = 'Codeville'; console.log(city);",
+            },
+            {
+              title: 'Spell 3 — change the value',
+              code: "let mood = 'happy'; console.log(mood); mood = 'excited'; console.log(mood);",
+            },
+            {
+              title: 'Spell 4 — numbers in pockets',
+              code: 'let a = 2; let b = 3; console.log(a + b);',
+            },
+          ],
+          trivia: [
+            'Use let when a value will change; use const when it should not.',
+            'camelCase names (e.g., favoriteColor) are common in JS.',
+            'Variables save you from retyping values.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — let',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let',
+            },
+            {
+              title: 'MDN — const',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const',
+            },
+            {
+              title: 'MDN — Variables',
+              url: 'https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/Variables',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.1 Easy — Store and Show',
+              description: `
+<p><strong>Task:</strong> Make a variable called <code>pet</code> with value <code>"cat"</code>. Print it.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: 'cat' },
+                { input: null, expect_print: 'cat' },
+                { input: 0, expect_print: 'cat' },
+                { input: 'ignored', expect_print: 'cat' },
+                { input: {}, expect_print: 'cat' },
+              ],
+              hints: [
+                'Declare with let.',
+                'Print the variable (not the string literal again).',
+                '✅ Solution: <code>let pet = "cat"; console.log(pet);</code>',
+              ],
+            },
+            {
+              title: 'S2.1 Medium — Update a Pocket',
+              description: `
+<p><strong>Task:</strong> Create <code>count</code> with value <code>1</code>, change it to <code>2</code>, then print the new value only.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: '', expect_print: 2 },
+                { input: null, expect_print: 2 },
+                { input: 'x', expect_print: 2 },
+                { input: 999, expect_print: 2 },
+              ],
+              hints: [
+                'Use let so the value can change.',
+                'Print once, after updating.',
+                '✅ Solution: <code>let count = 1; count = 2; console.log(count);</code>',
+              ],
+            },
+            {
+              title: 'S2.1 Hard — Two Pockets, One Sum',
+              description: `
+<p><strong>Task:</strong> Make <code>a = 4</code> and <code>b = 6</code>. Print their sum.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: '', expect_print: 10 },
+                { input: null, expect_print: 10 },
+                { input: 'n/a', expect_print: 10 },
+                { input: 0, expect_print: 10 },
+              ],
+              hints: [
+                'Numbers don’t use quotes.',
+                'Add then print.',
+                '✅ Solution: <code>let a = 4, b = 6; console.log(a + b);</code>',
+              ],
+            },
+          ],
+        },
+
+        // S2.2 MODULO
+        {
+          title: 'S2.2 — Sharing Fairly (Remainder %)',
+          description:
+            'Modulo (%) gives the remainder after division. It helps with even/odd checks and repeating patterns.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At Circle Court, coins are shared among sprites. The leftover pebble clinks into a bowl—that’s the remainder.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>Remainder: <code>a % b</code></li>
+    <li>Even check: <code>n % 2 === 0</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — simple remainder',
+              code: 'console.log(7 % 3); // 1',
+            },
+            {
+              title: 'Spell 2 — even',
+              code: 'let n = 10; console.log(n % 2 === 0);',
+            },
+            {
+              title: 'Spell 3 — odd',
+              code: 'let n = 11; console.log(n % 2 !== 0);',
+            },
+          ],
+          trivia: [
+            '7 % 3 is 1 because 3+3=6 with 1 leftover.',
+            'Modulo is perfect for even/odd.',
+            'Great for cycles like weekdays or indices.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Arithmetic operators (%)',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Remainder',
+            },
+            {
+              title: 'Khan Academy — Remainders',
+              url: 'https://www.khanacademy.org/math/arithmetic/arith-review-multiply-divide#arith-review-remainders',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.2 Easy — 10 % 4',
+              description:
+                `<p><strong>Task:</strong> Print the remainder of <code>10 % 4</code>.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: 2 },
+                { input: null, expect_print: 2 },
+                { input: 'x', expect_print: 2 },
+                { input: 0, expect_print: 2 },
+              ],
+              hints: [
+                'Compute directly.',
+                'Print the number only.',
+                '✅ Solution: <code>console.log(10 % 4);</code>',
+              ],
+            },
+            {
+              title: 'S2.2 Medium — Even or Odd',
+              description: `
+<p><strong>Task:</strong> Given a number in <code>input</code>, print <code>"even"</code> if it’s even, otherwise <code>"odd"</code>.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: 4, expect_print: 'even' },
+                { input: 7, expect_print: 'odd' },
+                { input: 0, expect_print: 'even' },
+                { input: -2, expect_print: 'even' },
+                { input: -3, expect_print: 'odd' },
+              ],
+              hints: [
+                'Check input % 2.',
+                'Zero counts as even.',
+                '✅ Solution: <code>console.log(input % 2 === 0 ? "even" : "odd");</code>',
+              ],
+            },
+            {
+              title: 'S2.2 Hard — Remainder Label',
+              description: `
+<p><strong>Task:</strong> The system gives <code>input = [a, b]</code>. Print <code>a % b</code>. If <code>b === 0</code>, print <code>"undefined"</code>.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: [7, 3], expect_print: 1 },
+                { input: [10, 5], expect_print: 0 },
+                { input: [1, 0], expect_print: 'undefined' },
+                { input: [-7, 3], expect_print: -1 },
+                { input: [7, -3], expect_print: 1 },
+              ],
+              hints: [
+                'Guard b === 0.',
+                'Then compute the remainder.',
+                '✅ Solution: <code>if (input[1] === 0) { console.log("undefined"); } else { console.log(input[0] % input[1]); }</code>',
+              ],
+            },
+          ],
+        },
+
+        // S2.3 COMPARISONS
+        {
+          title: 'S2.3 — Comparing Things (===, >, <, ≥, ≤)',
+          description:
+            'Comparisons return true or false. We use strict equality (===) and the usual greater/less signs.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At Balance Bridge, two plates hold values to compare. The pointer flips to “true” or “false”.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>Equal: <code>a === b</code></li>
+    <li>Greater: <code>a > b</code>, Less: <code>a < b</code></li>
+    <li>Greater or equal: <code>a >= b</code>, Less or equal: <code>a <= b</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            { title: 'Spell 1 — equals', code: 'console.log(3 === 3);' },
+            { title: 'Spell 2 — greater', code: 'console.log(5 > 2);' },
+            { title: 'Spell 3 — less or equal', code: 'console.log(4 <= 4);' },
+            {
+              title: 'Spell 4 — string compare',
+              code: "console.log('apple' < 'banana');",
+            },
+          ],
+          trivia: [
+            '=== checks value and type.',
+            'Comparisons always yield true/false.',
+            'Strings compare lexicographically by code points.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Comparison operators',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Comparison_Operators',
+            },
+            {
+              title: 'MDN — Equality comparisons',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Equality_comparisons_and_sameness',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.3 Easy — True or False',
+              description:
+                `<p><strong>Task:</strong> Print the result of <code>7 > 5</code>.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: true },
+                { input: null, expect_print: true },
+                { input: 0, expect_print: true },
+                { input: 'ignored', expect_print: true },
+              ],
+              hints: [
+                'Use > to compare.',
+                'Print the boolean directly.',
+                '✅ Solution: <code>console.log(7 > 5);</code>',
+              ],
+            },
+            {
+              title: 'S2.3 Medium — Check Match',
+              description: `
+<p><strong>Task:</strong> The system gives <code>input = [a, b]</code>. Print <code>true</code> if <code>a === b</code>, else <code>false</code>.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: [3, 3], expect_print: true },
+                { input: [3, 4], expect_print: false },
+                { input: ['5', 5], expect_print: false },
+                { input: ['hi', 'hi'], expect_print: true },
+                { input: ['a', 'b'], expect_print: false },
+              ],
+              hints: [
+                'Use strict equality.',
+                'Print the comparison directly.',
+                '✅ Solution: <code>console.log(input[0] === input[1]);</code>',
+              ],
+            },
+            {
+              title: 'S2.3 Hard — Between Check',
+              description: `
+<p><strong>Task:</strong> The system gives <code>input = [n, low, high]</code>. Print <code>true</code> if <code>n</code> is between <code>low</code> and <code>high</code> (inclusive), else <code>false</code>.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: [5, 1, 5], expect_print: true },
+                { input: [0, 1, 5], expect_print: false },
+                { input: [3, 3, 7], expect_print: true },
+                { input: [8, 3, 7], expect_print: false },
+                { input: [7, 7, 7], expect_print: true },
+              ],
+              hints: [
+                'Use >= and <= with &&.',
+                'Ends are inclusive.',
+                '✅ Solution: <code>console.log(input[0] >= input[1] && input[0] <= input[2]);</code>',
+              ],
+            },
+          ],
+        },
+
+        // S2.4 LOGIC
+        {
+          title: 'S2.4 — Tiny Truths (Booleans & Logic)',
+          description:
+            'Glue booleans with AND (&&), OR (||), and flip them with NOT (!).',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>In Lantern Lane, lights turn on if switches agree. AND needs both; OR needs at least one; NOT flips the result.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>AND: <code>a && b</code></li>
+    <li>OR: <code>a || b</code></li>
+    <li>NOT: <code>!a</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — both true',
+              code: 'console.log(true && true);',
+            },
+            {
+              title: 'Spell 2 — one is enough',
+              code: 'console.log(false || true);',
+            },
+            { title: 'Spell 3 — flip it', code: 'console.log(!false);' },
+            {
+              title: 'Spell 4 — mix with comparisons',
+              code: 'let a=5; console.log(a>=1 && a<=10);',
+            },
+          ],
+          trivia: [
+            'AND is like “both switches on”.',
+            'OR is “at least one switch on”.',
+            'NOT flips true ↔ false.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Logical operators',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_Operators',
+            },
+            {
+              title: 'MDN — Expressions & operators',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.4 Easy — At Least One',
+              description:
+                `<p><strong>Task:</strong> Print the result of <code>true || false</code>.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: true },
+                { input: null, expect_print: true },
+                { input: 'x', expect_print: true },
+                { input: 0, expect_print: true },
+              ],
+              hints: [
+                'OR is true if any side is true.',
+                'Print directly.',
+                '✅ Solution: <code>console.log(true || false);</code>',
+              ],
+            },
+            {
+              title: 'S2.4 Medium — In Range AND',
+              description: `
+<p><strong>Task:</strong> Given <code>input</code>, print <code>true</code> if <code>1 &le; input &le; 10</code>, else <code>false</code>.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: 5, expect_print: true },
+                { input: 1, expect_print: true },
+                { input: 10, expect_print: true },
+                { input: 0, expect_print: false },
+                { input: 11, expect_print: false },
+              ],
+              hints: [
+                'Use (input >= 1) && (input <= 10).',
+                'Return the boolean directly.',
+                '✅ Solution: <code>console.log(input >= 1 && input <= 10);</code>',
+              ],
+            },
+            {
+              title: 'S2.4 Hard — Not Empty',
+              description: `
+<p><strong>Task:</strong> Given a word in <code>input</code>, print <code>true</code> if it is not empty, else <code>false</code>.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: 'hi', expect_print: true },
+                { input: '', expect_print: false },
+                { input: 'a', expect_print: true },
+                { input: ' ', expect_print: true },
+                { input: 'robot', expect_print: true },
+              ],
+              hints: [
+                'Use length.',
+                'Flip with ! if needed.',
+                '✅ Solution: <code>console.log(input.length !== 0);</code>',
+              ],
+            },
+          ],
+        },
+
+        // S2.5 IF
+        {
+          title: 'S2.5 — If This, Then That',
+          description:
+            'A single if runs code when a condition is true; otherwise it does nothing.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At Choice Corner, a door opens only if you say the secret number.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;"><code>if (condition) {
+  console.log('Yes!');
+}</code></pre>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — simple if',
+              code: "let n=3; if (n>2) { console.log('big'); }",
+            },
+            {
+              title: 'Spell 2 — no print when false',
+              code: "let n=1; if (n>2) { console.log('big'); }",
+            },
+          ],
+          trivia: [
+            'If nothing prints, the condition was false.',
+            'Conditions are booleans built from comparisons.',
+            'Curly braces hold the code to run.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — if...else',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/if...else',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.5 Easy — If Nice',
+              description: `
+<p><strong>Task:</strong> If <code>input > 5</code>, print <code>"nice"</code>. Otherwise, print nothing.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: 6, expect_print: 'nice' },
+                { input: 5, expect_print: '' },
+                { input: 10, expect_print: 'nice' },
+                { input: -1, expect_print: '' },
+                { input: 0, expect_print: '' },
+              ],
+              hints: [
+                'Use if (input > 5).',
+                'Print only when true.',
+                '✅ Solution: <code>if (input > 5) { console.log("nice"); }</code>',
+              ],
+            },
+            {
+              title: 'S2.5 Medium — If Even',
+              description: `
+<p><strong>Task:</strong> If <code>input</code> is even, print <code>"even"</code>. Else, print nothing.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: 8, expect_print: 'even' },
+                { input: 3, expect_print: '' },
+                { input: 0, expect_print: 'even' },
+                { input: -2, expect_print: 'even' },
+                { input: 11, expect_print: '' },
+              ],
+              hints: [
+                'Use input % 2 === 0.',
+                'Print only when true.',
+                '✅ Solution: <code>if (input % 2 === 0) { console.log("even"); }</code>',
+              ],
+            },
+            {
+              title: 'S2.5 Hard — If In Range',
+              description: `
+<p><strong>Task:</strong> If <code>1 &le; input &le; 10</code>, print <code>"ok"</code>. Else, print nothing.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: 1, expect_print: 'ok' },
+                { input: 10, expect_print: 'ok' },
+                { input: 0, expect_print: '' },
+                { input: 11, expect_print: '' },
+                { input: -5, expect_print: '' },
+              ],
+              hints: [
+                'Use input >= 1 && input <= 10.',
+                'Print only when true.',
+                '✅ Solution: <code>if (input >= 1 && input <= 10) { console.log("ok"); }</code>',
+              ],
+            },
+          ],
+        },
+
+        // S2.6 IF/ELSE
+        {
+          title: 'S2.6 — Choose A or B (if/else)',
+          description:
+            'if/else chooses between two branches so your code always prints one message.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At the Fork Gate, a sign points left or right. The program chooses a path.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;"><code>if (condition) {
+  console.log('A');
+} else {
+  console.log('B');
+}</code></pre>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — even/odd',
+              code: "let n=7; if (n%2===0){console.log('even');} else {console.log('odd');}",
+            },
+            {
+              title: 'Spell 2 — pass/fail',
+              code: "let score=6; if (score>=5){console.log('pass');} else {console.log('try again');}",
+            },
+          ],
+          trivia: [
+            'Exactly one branch runs.',
+            'Conditions can use comparisons and logic.',
+            'Keep branch messages short and clear.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — if...else',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/if...else',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S2.6 Easy — Even/Odd',
+              description:
+                `<p><strong>Task:</strong> Given <code>input</code>, print <code>"even"</code> if even, otherwise <code>"odd"</code>.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: 4, expect_print: 'even' },
+                { input: 9, expect_print: 'odd' },
+                { input: 0, expect_print: 'even' },
+                { input: -2, expect_print: 'even' },
+                { input: -3, expect_print: 'odd' },
+              ],
+              hints: [
+                'Use modulo 2 and if/else.',
+                'Zero is even.',
+                '✅ Solution: <code>if (input % 2 === 0) { console.log("even"); } else { console.log("odd"); }</code>',
+              ],
+            },
+            {
+              title: 'S2.6 Medium — Age Gate',
+              description:
+                `<p><strong>Task:</strong> Given <code>input</code> as an age, print <code>"allowed"</code> if <code>input &ge; 13</code>, else <code>"blocked"</code>.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: 13, expect_print: 'allowed' },
+                { input: 12, expect_print: 'blocked' },
+                { input: 18, expect_print: 'allowed' },
+                { input: 0, expect_print: 'blocked' },
+                { input: 100, expect_print: 'allowed' },
+              ],
+              hints: [
+                'Use >= 13.',
+                'Print exactly the words.',
+                '✅ Solution: <code>if (input >= 13) { console.log("allowed"); } else { console.log("blocked"); }</code>',
+              ],
+            },
+            {
+              title: 'S2.6 Hard — Inside or Outside',
+              description:
+                `<p><strong>Task:</strong> Given <code>input</code>, print <code>"inside"</code> if <code>1 &le; input &le; 10</code>, else <code>"outside"</code>.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: 1, expect_print: 'inside' },
+                { input: 10, expect_print: 'inside' },
+                { input: 0, expect_print: 'outside' },
+                { input: 11, expect_print: 'outside' },
+                { input: -5, expect_print: 'outside' },
+              ],
+              hints: [
+                'Combine two comparisons with &&.',
+                'Exactly one word prints.',
+                '✅ Solution: <code>if (input >= 1 && input <= 10) { console.log("inside"); } else { console.log("outside"); }</code>',
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    /* ----------------- Chapter 3 ----------------- */
+    const chapter3: Chapter = {
+      rewardPoints: 60,
+      creditPoints: 16,
+      title: 'Chapter 3 — Little Lists and Lineups (Arrays)',
+      description:
+        'Arrays store ordered lists of values. Create arrays, count items, pick by position, and add/remove items at the ends.',
+      sections: [
+        // S3.1 CREATE ARRAYS
+        {
+          title: 'S3.1 — Make a Line (Create Arrays)',
+          description:
+            'An array is a lineup of values inside square brackets. Items are separated by commas. You can mix numbers and strings.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At Shelf Square, bottles line up in a neat row. Zia places labels in an array to keep them together.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>Create: <code>let colors = ['red', 'blue'];</code></li>
+    <li>Print the whole array: <code>console.log(colors);</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — two colors',
+              code: "let colors=['red','blue']; console.log(colors);",
+            },
+            {
+              title: 'Spell 2 — mixed items',
+              code: "let stuff=['cup',3,'hat']; console.log(stuff);",
+            },
+            {
+              title: 'Spell 3 — empty shelf',
+              code: 'let empty=[]; console.log(empty);',
+            },
+          ],
+          trivia: [
+            'Arrays remember item order.',
+            'You can store mixed types.',
+            'Empty array [] has length 0.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Arrays',
+              url: 'https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/Arrays',
+            },
+            {
+              title: 'MDN — Array (reference)',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S3.1 Easy — Two Pets',
+              description:
+                `<p><strong>Task:</strong> Create <code>["cat","dog"]</code> and print it.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: '["cat","dog"]' },
+                { input: null, expect_print: '["cat","dog"]' },
+                { input: 'ignored', expect_print: '["cat","dog"]' },
+                { input: 0, expect_print: '["cat","dog"]' },
+              ],
+              hints: [
+                'Use [] and commas.',
+                'Print the array variable.',
+                '✅ Solution: <code>const pets = ["cat","dog"]; console.log(JSON.stringify(pets));</code>',
+              ],
+            },
+            {
+              title: 'S3.1 Medium — Three Numbers',
+              description:
+                `<p><strong>Task:</strong> Create <code>[1,2,3]</code> and print it.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: '', expect_print: '[1,2,3]' },
+                { input: null, expect_print: '[1,2,3]' },
+                { input: 'n/a', expect_print: '[1,2,3]' },
+                { input: 42, expect_print: '[1,2,3]' },
+              ],
+              hints: [
+                'No quotes for numbers.',
+                'Separate with commas.',
+                '✅ Solution: <code>const a=[1,2,3]; console.log(JSON.stringify(a));</code>',
+              ],
+            },
+            {
+              title: 'S3.1 Hard — Mixed Trio',
+              description:
+                `<p><strong>Task:</strong> Create <code>["sun",7,"moon"]</code> and print it.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: '', expect_print: '["sun",7,"moon"]' },
+                { input: null, expect_print: '["sun",7,"moon"]' },
+                { input: 0, expect_print: '["sun",7,"moon"]' },
+                { input: 'x', expect_print: '["sun",7,"moon"]' },
+              ],
+              hints: [
+                'Strings need quotes; numbers don’t.',
+                'Keep order.',
+                '✅ Solution: <code>const a=["sun",7,"moon"]; console.log(JSON.stringify(a));</code>',
+              ],
+            },
+          ],
+        },
+
+        // S3.2 LENGTH
+        {
+          title: 'S3.2 — How Many? (.length)',
+          description: 'Use the length property to count items in an array.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>The Counter Clock ticks each time an item joins the lineup.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul><li>Count: <code>array.length</code></li></ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — count two',
+              code: "let colors=['red','blue']; console.log(colors.length);",
+            },
+            {
+              title: 'Spell 2 — count empty',
+              code: 'let a=[]; console.log(a.length);',
+            },
+            {
+              title: 'Spell 3 — count three',
+              code: "let a=['x','y','z']; console.log(a.length);",
+            },
+          ],
+          trivia: [
+            'Empty array has length 0.',
+            'Length grows and shrinks as items change.',
+            'Strings also have .length.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Array.length',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/length',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S3.2 Easy — Count 3',
+              description:
+                `<p><strong>Task:</strong> Print the length of <code>["a","b","c"]</code>.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: 3 },
+                { input: null, expect_print: 3 },
+                { input: 'x', expect_print: 3 },
+                { input: 0, expect_print: 3 },
+              ],
+              hints: [
+                'Use .length.',
+                'Print the number.',
+                '✅ Solution: <code>console.log(["a","b","c"].length);</code>',
+              ],
+            },
+            {
+              title: 'S3.2 Medium — Length of Empty',
+              description:
+                `<p><strong>Task:</strong> Make an empty array and print its length.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: '', expect_print: 0 },
+                { input: null, expect_print: 0 },
+                { input: 'ignored', expect_print: 0 },
+                { input: {}, expect_print: 0 },
+              ],
+              hints: [
+                '[] makes an empty array.',
+                'Length is 0.',
+                '✅ Solution: <code>const a=[]; console.log(a.length);</code>',
+              ],
+            },
+            {
+              title: 'S3.2 Hard — Count Mixed',
+              description:
+                `<p><strong>Task:</strong> Create <code>["a",1,"b",2]</code>. Print its length.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: '', expect_print: 4 },
+                { input: null, expect_print: 4 },
+                { input: 'x', expect_print: 4 },
+                { input: 0, expect_print: 4 },
+              ],
+              hints: [
+                'Length counts all items, any type.',
+                'Print once.',
+                '✅ Solution: <code>const a=["a",1,"b",2]; console.log(a.length);</code>',
+              ],
+            },
+          ],
+        },
+
+        // S3.3 INDEXING
+        {
+          title: 'S3.3 — First, Middle, Last (Indexing)',
+          description:
+            'Pick items by position using square brackets. First is index 0; last is length - 1.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>Index Isle has stepping stones numbered from 0.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>First: <code>a[0]</code></li>
+    <li>Last: <code>a[a.length - 1]</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — first item',
+              code: "let a=['red','green','blue']; console.log(a[0]);",
+            },
+            {
+              title: 'Spell 2 — last item',
+              code: "let a=['red','green','blue']; console.log(a[a.length-1]);",
+            },
+            {
+              title: 'Spell 3 — middle item',
+              code: "let a=['sun','moon','star']; console.log(a[1]);",
+            },
+          ],
+          trivia: [
+            'Indexing starts at 0.',
+            'Last item is length - 1.',
+            'Past-the-end gives undefined.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Property accessors',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_Accessors',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S3.3 Easy — First Fruit',
+              description:
+                `<p><strong>Task:</strong> From <code>["apple","banana","pear"]</code>, print the first item.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: 'apple' },
+                { input: null, expect_print: 'apple' },
+                { input: 'x', expect_print: 'apple' },
+                { input: 0, expect_print: 'apple' },
+              ],
+              hints: [
+                'Index 0 is first.',
+                'Print that value.',
+                '✅ Solution: <code>console.log(["apple","banana","pear"][0]);</code>',
+              ],
+            },
+            {
+              title: 'S3.3 Medium — Last Color',
+              description:
+                `<p><strong>Task:</strong> From <code>["red","green","blue"]</code>, print the last item.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: '', expect_print: 'blue' },
+                { input: null, expect_print: 'blue' },
+                { input: 'x', expect_print: 'blue' },
+                { input: 0, expect_print: 'blue' },
+              ],
+              hints: [
+                'Use length - 1.',
+                'Then access that index.',
+                '✅ Solution: <code>const a=["red","green","blue"]; console.log(a[a.length-1]);</code>',
+              ],
+            },
+            {
+              title: 'S3.3 Hard — Middle Animal',
+              description:
+                `<p><strong>Task:</strong> From <code>["ant","bear","cat","dog","eel"]</code>, print the middle (index 2).</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: '', expect_print: 'cat' },
+                { input: null, expect_print: 'cat' },
+                { input: 'ignored', expect_print: 'cat' },
+                { input: 0, expect_print: 'cat' },
+              ],
+              hints: [
+                'Count from 0: 0,1,2,3,4.',
+                'Pick index 2.',
+                '✅ Solution: <code>console.log(["ant","bear","cat","dog","eel"][2]);</code>',
+              ],
+            },
+          ],
+        },
+
+        // S3.4 PUSH / POP
+        {
+          title: 'S3.4 — Add & Remove (push, pop)',
+          description:
+            'Use push to add to the end of an array, and pop to remove the last item.',
+          content: `
+<div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
+  <h4>🗺️ The Encounter</h4>
+  <p>At End Dock, a ferry brings new items and takes the last one away.</p>
+
+
+  <h4>✨ The Secret Spell</h4>
+  <ul>
+    <li>Add to end: <code>a.push('new')</code></li>
+    <li>Remove last: <code>a.pop()</code></li>
+  </ul>
+
+
+  <div id="spell"></div>
+</div>
+      `.trim(),
+          runnables: [
+            {
+              title: 'Spell 1 — push one',
+              code: "let a=['red']; a.push('blue'); console.log(a);",
+            },
+            {
+              title: 'Spell 2 — push two',
+              code: "let a=['sun']; a.push('moon'); a.push('star'); console.log(a);",
+            },
+            {
+              title: 'Spell 3 — pop one',
+              code: "let a=['A','B','C']; a.pop(); console.log(a);",
+            },
+          ],
+          trivia: [
+            'push returns the new length.',
+            'pop returns the removed item.',
+            'Arrays are flexible shelves—easy to grow or shrink.',
+          ],
+          additionalResources: [
+            {
+              title: 'MDN — Array.prototype.push()',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/push',
+            },
+            {
+              title: 'MDN — Array.prototype.pop()',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/pop',
+            },
+          ],
+          rewardPoints: 60,
+          creditPoints: 16,
+          challenges: [
+            {
+              title: 'S3.4 Easy — Add One',
+              description:
+                `<p><strong>Task:</strong> Start with <code>["a"]</code>. Add <code>"b"</code> to the end and print the result.</p>`.trim(),
+              difficulty: 'easy',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.easy,
+              creditPoints: CREDIT_POINTS.easy,
+              tests: [
+                { input: '', expect_print: '["a","b"]' },
+                { input: null, expect_print: '["a","b"]' },
+                { input: 'x', expect_print: '["a","b"]' },
+                { input: 0, expect_print: '["a","b"]' },
+              ],
+              hints: [
+                'Create the array, then push.',
+                'Print the whole array.',
+                '✅ Solution: <code>const a=["a"]; a.push("b"); console.log(JSON.stringify(a));</code>',
+              ],
+            },
+            {
+              title: 'S3.4 Medium — Add Two',
+              description:
+                `<p><strong>Task:</strong> Start with <code>[]</code>. Add <code>"x"</code> then <code>"y"</code>, then print.</p>`.trim(),
+              difficulty: 'medium',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.medium,
+              creditPoints: CREDIT_POINTS.medium,
+              tests: [
+                { input: '', expect_print: '["x","y"]' },
+                { input: null, expect_print: '["x","y"]' },
+                { input: 'n/a', expect_print: '["x","y"]' },
+                { input: 42, expect_print: '["x","y"]' },
+              ],
+              hints: [
+                'Call push twice in order.',
+                'Print at the end.',
+                '✅ Solution: <code>const a=[]; a.push("x"); a.push("y"); console.log(JSON.stringify(a));</code>',
+              ],
+            },
+            {
+              title: 'S3.4 Hard — Pop Result',
+              description:
+                `<p><strong>Task:</strong> Start with <code>["dog","cat","bird"]</code>. Remove the last item using <code>pop()</code>. Print the array that remains.</p>`.trim(),
+              difficulty: 'hard',
+              moduleType: 'javascript',
+              rewardPoints: REWARD_POINTS.hard,
+              creditPoints: CREDIT_POINTS.hard,
+              tests: [
+                { input: '', expect_print: '["dog","cat"]' },
+                { input: null, expect_print: '["dog","cat"]' },
+                { input: 0, expect_print: '["dog","cat"]' },
+                { input: 'ignored', expect_print: '["dog","cat"]' },
+              ],
+              hints: [
+                'Create the start array.',
+                'Call pop once.',
+                '✅ Solution: <code>const a=["dog","cat","bird"]; a.pop(); console.log(JSON.stringify(a));</code>',
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
     const createChapter = async (chapter: Chapter, order: number) => {
       // INSERT CHAPTER 1
       await tx.insert(schema.chapters).values({
@@ -1268,7 +2443,7 @@ If it is empty, show nothing (empty line).</p>`.trim(),
     };
 
     let chapterOrder = 1;
-    for (const chapter of [chapter1]) {
+    for (const chapter of [chapter1, chapter2, chapter3]) {
       await createChapter(chapter, chapterOrder);
       chapterOrder++;
       console.log('Seeding completed ' + chapter.title + '.');

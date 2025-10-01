@@ -31,3 +31,6 @@ Thumbs.db
 
 # Test reports
 junit.xml
+
+public/avatars/*
+public/banners/*

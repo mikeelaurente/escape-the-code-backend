@@ -39,3 +39,9 @@ Authorization: Bearer {{accessToken}}
     "lastName": "lastName updated",
     "email": "test100@mail.com"
 }
+
+
+### Get Dashboard
+GET {{url}}/users/dashboard
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
