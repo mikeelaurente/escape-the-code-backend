@@ -65,7 +65,11 @@ export async function updateUserBalance(
 
 export const getUserRanking = async (): Promise<UserRanking[]> => {
   const query = sql`
-        SELECT 
+          SELECT 
+          @rownum := @rownum + 1 AS \`rank\`, 
+          x.* 
+        FROM (
+          SELECT 
             u.id,
             u.email,
             u.firstName,
@@ -76,9 +80,12 @@ export const getUserRanking = async (): Promise<UserRanking[]> => {
             (SELECT COUNT(*) FROM sections) total
             FROM challenge_answers ca
             JOIN users u ON u.id = ca.user_id
-        WHERE \`status\` = 1
-        GROUP BY u.id
-        ORDER BY points DESC;
+          WHERE \`status\` = 1
+          GROUP BY u.id
+          ORDER BY points DESC
+        ) x,
+        (SELECT @rownum := 0) r
+        ORDER BY points DESC, x.completed DESC
     `;
   const [result, _] = await db.execute<UserRanking>(query);
   const ranking = result as any as UserRanking[];
@@ -86,7 +93,6 @@ export const getUserRanking = async (): Promise<UserRanking[]> => {
   return [
     ...ranking.map((rank, idx) => ({
       ...rank,
-      rank: idx + 1,
       points: Number(rank.points),
       photoUrl: resolveAvatar(rank.photoUrl),
     })),
@@ -95,6 +101,22 @@ export const getUserRanking = async (): Promise<UserRanking[]> => {
 
 export const getUserRankingFor = async (userId: number) => {
   const query = sql`
+        WITH ranking AS (
+            SELECT 
+              @rownum := @rownum + 1 AS \`rank\`, 
+              x.* 
+            FROM (
+              SELECT 
+                  u.id,
+                  SUM(rewardPoints) AS points
+                  FROM challenge_answers ca
+                  JOIN users u ON u.id = ca.user_id
+              WHERE \`status\` = 1
+              GROUP BY u.id
+              ORDER BY points DESC
+            ) x,
+            (SELECT @rownum := 0) r
+        )
         SELECT 
             u.id,
             u.email,
@@ -103,7 +125,8 @@ export const getUserRankingFor = async (userId: number) => {
             u.about,
             u.photoUrl,
             u.bannerUrl,
-            SUM(rewardPoints) AS points,
+            r.\`rank\`,
+            r.points,
             (SELECT COUNT(*) FROM story_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total,
             (SELECT MIN(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration 
@@ -115,11 +138,8 @@ export const getUserRankingFor = async (userId: number) => {
               GROUP BY user_id
             ) longestTime
             FROM users u
-            LEFT JOIN challenge_answers ca ON u.id = ca.user_id
-              AND ca.\`status\` = 1
+            LEFT JOIN ranking r ON r.id = u.id
         WHERE u.id = ${userId}
-        GROUP BY u.id
-        ORDER BY points DESC;
     `;
   const [result, _] = await db.execute<UserRanking>(query);
   const ranking = result as any as UserRanking[] & {
@@ -131,7 +151,6 @@ export const getUserRankingFor = async (userId: number) => {
   const userRank = [
     ...ranking.map((rank, idx) => ({
       ...rank,
-      rank: idx + 1,
       points: Number(rank.points),
       photoUrl: resolveAvatar(rank.photoUrl),
       banner: resolveBanner(rank.bannerUrl),
@@ -194,6 +213,23 @@ export const getSectionAnswersWithHints = async (userId: number) => {
               FROM hint_usages
               WHERE user_id = ${userId}
               GROUP BY challenge_id
+            ),
+            submissions AS (
+              SELECT 
+              answer_id, 
+              JSON_ARRAYAGG(
+                  JSON_OBJECT(
+                    'id', id,
+                    'code', \`code\`,
+                    'result', result,
+                    'metadata', metadata,
+                    'codeOutput', codeOutput,
+                    'created_at', created_at
+                  )
+                ) AS submissions
+              FROM challenge_answer_submissions
+              WHERE user_id = ${userId}
+              GROUP BY answer_id
             )
             SELECT 
               s.chapter_id,
@@ -204,9 +240,11 @@ export const getSectionAnswersWithHints = async (userId: number) => {
                     'created_at', ca.created_at,
                     'completed_at', ca.completed_at,
                     'challenge_id', ca.challenge_id,
+                    'feedback', ca.feedback,
                     'time_taken', TIMESTAMPDIFF(SECOND, ca.created_at, ca.completed_at),
                     'status', ca.\`status\`,
-                    'usages', uh.records
+                    'usages', uh.records,
+                    'submissions', sub.submissions
                   )
                 ) AS answers
             FROM challenges c
@@ -217,6 +255,7 @@ export const getSectionAnswersWithHints = async (userId: number) => {
                 AND ca.\`status\` = 1 
                 AND ca.user_id = ${userId}
             LEFT JOIN used_hints uh ON ca.challenge_id = uh.challenge_id
+            LEFT JOIN submissions sub ON sub.answer_id = ca.id
             GROUP BY s.chapter_id, s.id
           ),
           section_challenges AS (

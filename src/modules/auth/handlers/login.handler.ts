@@ -70,6 +70,7 @@ export const loginHandler = async (
           lastName: user.lastName,
           avatar: resolveAvatar(user.photoUrl || ''),
           banner: resolveBanner(user.bannerUrl || ''),
+          credits: user.credits,
           about: user.about,
         },
       },

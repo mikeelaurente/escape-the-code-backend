@@ -31,6 +31,7 @@ export const getMeHandler = async (
         lastName: user.lastName,
         avatar: resolveAvatar(user.photoUrl || ''),
         banner: resolveBanner(user.bannerUrl || ''),
+        credits: user.credits,
         about: user.about,
       },
     },

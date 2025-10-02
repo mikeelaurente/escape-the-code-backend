@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { db } from '../../db';
+import { db, EscapeTheCodeTransaction } from '../../db';
 import * as schema from '../../db/schema';
 
-export const getNextSectionFor = async (studentId: number) => {
+export const getNextSectionFor = async (
+  studentId: number,
+  tx?: EscapeTheCodeTransaction,
+) => {
   const query = sql`
         SELECT 
             s.id,
@@ -22,7 +25,8 @@ export const getNextSectionFor = async (studentId: number) => {
         ORDER BY c.order, s.order
         LIMIT 1;
     `;
-  const [result, _] = await db.execute(query);
+  const theDb = tx ?? db;
+  const [result, _] = await theDb.execute(query);
   const [nextSection] = result as any;
   return { ...(nextSection as any as typeof schema.sections.$inferSelect) };
 };
