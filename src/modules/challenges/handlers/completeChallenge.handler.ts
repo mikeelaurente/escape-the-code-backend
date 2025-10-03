@@ -121,19 +121,24 @@ export const completeChallengeHandler = async (
 
       try {
         feedback = await generateFeedback(`
-      Respond in HTML (wrap in div, don't markdown):
-      CHALLENGE GIVEN: ${challenge.description}
-      DIFFICULTY: ${challenge.difficulty}
-      USER CODE: ${successfulSubmission.code}
-      USER CODE RESULT: ${successfulSubmission.codeOutput}
+CHALLENGE GIVEN: """
+${challenge.description}
+"""
+DIFFICULTY: ${challenge.difficulty}
+USER CODE: """
+${successfulSubmission.code}
+"""
+USER CODE RESULT: """
+${successfulSubmission.codeOutput}
+"""
 
-      Response:
-      1. Code Review
-      2. Code Improvements
-      3. Best Practices
-      4. Additional Resources
-      5. Trivia
-    `);
+Respond in HTML only (wrapped in div, no markdown syntax):
+1. Code Review
+2. Code Improvements
+3. Best Practices
+4. Additional Resources
+5. Trivia
+`);
       } catch (e) {
         console.log(e);
         feedback = 'No feedback.';
