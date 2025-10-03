@@ -16,6 +16,7 @@ export class Mailer {
       port: config.mail.port,
       sender: config.mail.from,
       secure: config.mail.secure,
+      auth: config.mail.auth,
     });
   }
 

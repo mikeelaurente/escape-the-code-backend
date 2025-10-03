@@ -13,6 +13,10 @@ interface Config {
     host: string;
     port: number;
     secure: boolean;
+    auth: {
+      user: string | undefined;
+      password: string | undefined;
+    };
   };
   passwordReset: {
     expirationInMinutes: number;
@@ -31,6 +35,10 @@ const config: Config = {
     port: process.env.MAIL_PORT ? Number(process.env.MAIL_PORT) : 1025,
     from: process.env.MAIL_FROM || 'admin@escapethecode.com',
     secure: process.env.MAIL_SECURE ? process.env.MAIL_SECURE == 'true' : false,
+    auth: {
+      user: process.env.MAIL_USER,
+      password: process.env.MAIL_PASSWORD,
+    },
   },
   passwordReset: {
     expirationInMinutes: process.env.PASSWORD_RESET_EXPIRATION_IN_MINUTES
