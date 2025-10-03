@@ -7,6 +7,7 @@ import * as authSchema from '../auth.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import * as jwtHelper from '../../../helpers/jwt.helper';
 import { resolveAvatar, resolveBanner } from '../../../helpers/image.helper';
+import { updateUserBalance } from '../../../db/repositories/user.repository';
 
 export const verificationConfirmHandler = async (
   req: Request,
@@ -55,6 +56,8 @@ export const verificationConfirmHandler = async (
       type: 'in',
       group: 'reward',
     });
+
+    await updateUserBalance(user.id);
 
     return res.json({
       status: 'ok',
