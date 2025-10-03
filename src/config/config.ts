@@ -15,7 +15,7 @@ interface Config {
     secure: boolean;
     auth: {
       user: string | undefined;
-      password: string | undefined;
+      pass: string | undefined;
     };
   };
   passwordReset: {
@@ -37,7 +37,7 @@ const config: Config = {
     secure: process.env.MAIL_SECURE ? process.env.MAIL_SECURE == 'true' : false,
     auth: {
       user: process.env.MAIL_USER,
-      password: process.env.MAIL_PASSWORD,
+      pass: process.env.MAIL_PASSWORD,
     },
   },
   passwordReset: {
