@@ -54,6 +54,10 @@ export const passwordResetHandler = async (
           .add(config.passwordReset.expirationInMinutes, 'minutes')
           .toDate();
       }
+    } else {
+      expiration = dayjs()
+        .add(config.passwordReset.expirationInMinutes, 'minutes')
+        .toDate();
     }
     if (!passwordResetToken) {
       passwordResetToken = randomstring.generate({
