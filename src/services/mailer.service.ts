@@ -15,7 +15,7 @@ export class Mailer {
       host: config.mail.host,
       port: config.mail.port,
       sender: config.mail.from,
-      secure: false,
+      secure: config.mail.secure,
     });
   }
 
