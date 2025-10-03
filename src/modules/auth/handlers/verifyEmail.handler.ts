@@ -48,6 +48,14 @@ export const verificationConfirmHandler = async (
       })
       .where(eq(schema.users.id, user.id));
 
+    await db.insert(schema.creditTransactions).values({
+      title: 'Initial Balance',
+      amount: 50,
+      userId: user.id,
+      type: 'in',
+      group: 'reward',
+    });
+
     return res.json({
       status: 'ok',
       message: 'Email has been verified!',
