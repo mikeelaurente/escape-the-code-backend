@@ -19,7 +19,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(express.static(path.join(__dirname, '../', 'public')));
+const pubFolder =
+  process.env.NODE_ENV === 'production' ? 'public' : '../public';
+
+app.use(express.static(path.join(__dirname, pubFolder)));
 
 // Routes
 app.use('/api/auth', authRoutes);
