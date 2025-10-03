@@ -135,6 +135,7 @@ export const completeChallengeHandler = async (
       5. Trivia
     `);
       } catch (e) {
+        console.log(e);
         feedback = 'No feedback.';
       }
 

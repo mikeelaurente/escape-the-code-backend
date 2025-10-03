@@ -2,9 +2,15 @@ import { spawn } from 'child_process';
 import path from 'path';
 
 export function generateFeedback(args: string): Promise<string> {
+  const query = Buffer.from(args).toString('base64');
+  console.log(query);
   const scriptPath = path.join(__dirname, '../npc/runner.py');
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python', ['-u', scriptPath, args]);
+    const pythonProcess = spawn(process.env.PYTHON_EXEC!, [
+      '-u',
+      scriptPath,
+      query,
+    ]);
 
     let scriptOutput = '';
     let scriptError = '';
