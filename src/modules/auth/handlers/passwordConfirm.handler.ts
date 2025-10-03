@@ -51,11 +51,11 @@ export const passwordConfirmHandler = async (
 
     const expiration = user.passwordResetExpiration;
     const now = new Date();
-    const diff = now.getTime() - expiration.getTime();
+    const diff = expiration.getTime() - now.getTime();
     if (diff <= 0) {
       return res.json({
         status: 'error',
-        message: 'The password reset token has expired.',
+        error: 'The password reset token has expired.',
       });
     }
 
