@@ -1,5 +1,5 @@
 import { relations, InferSelectModel } from 'drizzle-orm';
-import { tinyint } from 'drizzle-orm/mysql-core';
+import { index, tinyint, uniqueIndex } from 'drizzle-orm/mysql-core';
 import {
   datetime,
   timestamp,
@@ -52,14 +52,85 @@ export const creditTransactions = mysqlTable('credit_transactions', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
+export type AchievementRule =
+  // 1️⃣ Complete N challenges in a row
+  | {
+      type: 'streak';
+      /** How many consecutive challenges must be completed */
+      length: number;
+      /** Optional flag for requiring zero wrong answers in the streak */
+      withoutWrong?: boolean;
+      /** Optional — restricts this achievement to a specific chapter order (e.g., 1, 2, 3) */
+      chapterOrder: number;
+    }
+
+  // 2️⃣ Complete N challenges in a row with no hints used
+  | {
+      type: 'no_hints_streak';
+      /** Number of consecutive no-hint completions */
+      length: number;
+    }
+
+  // 3️⃣ Reach a total count of no-hint completions (not necessarily consecutive)
+  | {
+      type: 'no_hints_total';
+      /** How many total no-hint completions are needed */
+      count: number;
+    }
+
+  // 4️⃣ Solve a challenge within a time limit (chapter-specific)
+  | {
+      type: 'time_to_solve_under_seconds';
+      /** Threshold in seconds for fast completion */
+      seconds: number;
+      /** Optional — restricts this achievement to a specific chapter order (e.g., 1, 2, 3) */
+      chapterOrder?: number;
+    }
+
+  // 5️⃣ Finish an entire chapter flawlessly (no hints in any challenge)
+  | {
+      type: 'chapter_perfect';
+      /** Exact chapter title, e.g. "Chapter 1 — Welcome to Codeville!" */
+      chapterTitle: string;
+    }
+
+  // 6️⃣ Maintain daily activity streak
+  | {
+      type: 'daily_active_streak';
+      /** Number of consecutive active days required */
+      days: number;
+    }
+
+  // 7️⃣ Share community solutions that are approved by moderators
+  | {
+      type: 'community_solution_shared';
+      /** Must be approved? */
+      approved: boolean;
+      /** Number of approved submissions required */
+      count: number;
+    }
+
+  // 8️⃣ Complete multiple challenges while using at most X hints each
+  | {
+      type: 'limited_hints_per_challenge';
+      /** Maximum hints allowed per challenge */
+      maxHints: number;
+      /** Number of challenges to satisfy the condition */
+      count: number;
+    };
+
 export const achievements = mysqlTable('achievements', {
   id: int('id').autoincrement().primaryKey(),
-  title: varchar({ length: 255 }).notNull().unique(),
-  description: varchar({ length: 1024 }).notNull(),
-  difficulty: varchar({ length: 30 })
+  code: varchar('code', { length: 64 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull().unique(),
+  description: varchar('description', { length: 1024 }).notNull(),
+  difficulty: varchar('difficulty', { length: 30 })
     .notNull()
     .$type<'easy' | 'medium' | 'hard'>(),
-  rewardPoints: int().notNull(),
+  rewardPoints: int('reward_points').notNull(),
+  creditPoints: int('credit_points').notNull().default(0),
+  icon: varchar('icon', { length: 64 }).notNull().default('tabler:award'),
+  rule: json('rule').$type<AchievementRule>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
@@ -83,31 +154,26 @@ export const storyProgress = mysqlTable('story_progress', {
 
 export const stories = mysqlTable('stories', {
   id: int('id').autoincrement().primaryKey(),
+  coverImage: varchar('cover_image', { length: 255 }),
   title: varchar({ length: 255 }).notNull().unique(),
   description: varchar({ length: 2048 }).notNull(),
-  rewardOptions: json('reward_options')
-    .$type<{
-      easy: number;
-      medium: number;
-      hard: number;
-    }>()
-    .$default(() => ({
-      easy: 10,
-      medium: 20,
-      hard: 30,
-    })),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
 export const chapters = mysqlTable('chapters', {
   id: int('id').autoincrement().primaryKey(),
-  storyId: int('story_id').references(() => stories.id),
-  order: int().notNull(),
-  title: varchar({ length: 255 }).notNull(),
-  description: varchar({ length: 2048 }).notNull(),
-  rewardPoints: int().default(0),
-  creditPoints: int().default(0),
+  storyId: int('story_id')
+    .notNull()
+    .references(() => stories.id),
+  title: varchar('title', { length: 255 }).notNull().unique(),
+  description: varchar('description', { length: 2048 }).notNull(),
+  order: int('order').notNull(),
+  coverImage: varchar('cover_image', { length: 512 }),
+  rewardPoints: int('reward_points').notNull().default(0),
+  creditPoints: int('credit_points').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
 export const sections = mysqlTable('sections', {
@@ -116,6 +182,7 @@ export const sections = mysqlTable('sections', {
     .notNull()
     .references(() => chapters.id),
   order: int('order').notNull(),
+  coverImage: varchar('cover_image', { length: 255 }),
   title: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   content: text('content').notNull(),
@@ -205,6 +272,20 @@ export const userRelations = relations(users, ({ one, many }) => ({
   storyProgress: many(storyProgress),
   challengeAnswers: many(challengeAnswers),
 }));
+
+export const achievementRelations = relations(achievements, ({ many }) => ({
+  userAchievements: many(userAchievements),
+}));
+
+export const userAchievementRelations = relations(
+  userAchievements,
+  ({ one }) => ({
+    achievement: one(achievements, {
+      fields: [userAchievements.achievementId],
+      references: [achievements.id],
+    }),
+  }),
+);
 
 export const challengeAnswersRelations = relations(
   challengeAnswers,

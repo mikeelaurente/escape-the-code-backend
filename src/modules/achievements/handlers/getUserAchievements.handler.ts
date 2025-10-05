@@ -1,19 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
-import { getUserRankingFor } from '../../../db/repositories/user.repository';
-import { getNextSectionFor } from '../../../db/repositories/story.repository';
-import * as schema from '../../../db/schema';
-import { eq, asc } from 'drizzle-orm';
 import { db } from '../../../db';
+import * as schema from '../../../db/schema';
+import { asc, eq, sql } from 'drizzle-orm';
+import { getNextSectionFor } from '../../../db/repositories/story.repository';
+import { getUserRanking } from '../../../db/repositories/user.repository';
 
-export const getUserStatsHandler = async (
+export const getUserAchievementsHandler = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const userId = Number(req.params.id);
-    const userRank = await getUserRankingFor(userId);
-    const nextSection = await getNextSectionFor(userId);
+    const userId = Number(req.user?.id);
 
     const achievements = await db.query.userAchievements.findMany({
       where: eq(schema.userAchievements.userId, userId),
@@ -21,7 +19,6 @@ export const getUserStatsHandler = async (
       with: {
         achievement: {
           columns: {
-            icon: true,
             title: true,
             description: true,
             difficulty: true,
@@ -33,9 +30,9 @@ export const getUserStatsHandler = async (
 
     res.json({
       status: 'ok',
-      data: { rank: userRank, nextSection: nextSection, achievements },
+      data: achievements,
     });
-  } catch (e) {
-    return next(e);
+  } catch (error) {
+    next(error);
   }
 };

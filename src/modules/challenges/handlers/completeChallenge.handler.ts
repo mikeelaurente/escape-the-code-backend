@@ -7,6 +7,7 @@ import { generateFeedback } from '../../../feedback';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { onChallengeCompleted } from '../../../services/achievements.service';
 
 export const completeChallengeHandler = async (
   req: Request,
@@ -131,14 +132,39 @@ ${successfulSubmission.code}
 USER CODE RESULT: """
 ${successfulSubmission.codeOutput}
 """
-
 Respond in HTML only (wrapped in div, no markdown syntax):
-1. Code Review
-2. Code Improvements
-3. Best Practices
-4. Additional Resources
-5. Trivia
-`);
+<div>
+    <div>
+          <h2>Code Review</h2>
+          <div>{ CODE_REVIEW_HERE }</div>
+    </div>
+    <div>
+          <h2>Code Improvements</h2>
+          <div>{ CODE_IMPROVEMENTS_HERE }</div>
+    </div>
+    <div>
+          <h2>Best Practices</h2>
+          <div>{ BEST_PRACTICES_HERE }</div>
+    </div>
+    <div>
+          <h2>Additional Resources</h2>
+          <div>{ ADDITIONAL_RESOURCES_HERE }</div>
+    </div>
+    <div>
+          <h2>Trivias</h2>
+          <div>{ TRIVIAS_HERE }</div>
+    </div>
+</div>
+Important Rules:
+- make sure to use the given task as context when giving a feedback or code review.
+- the input data is a variable named 'input'.
+- to display the output, console.log will be used.
+- for code review - check if the user has followed the given task. Also, validate if some tricks were used to bypass the correct procedure.
+- for code improvements - if the user did not follow the given task, provide an explanation on how it could be done.
+- for additional resources - make sure to pull resources from reputable sites.
+- use <br/> for line breaks
+- wrap code in <pre> tag
+        `);
       } catch (e) {
         console.log(e);
         feedback = 'No feedback.';
@@ -199,7 +225,21 @@ Respond in HTML only (wrapped in div, no markdown syntax):
       };
     });
 
-    return res.json(response);
+    let achievements: (typeof schema.achievements.$inferSelect)[] = [];
+    if (response.status === 'ok' && response?.data?.nextSection) {
+      const answerId = response.data.answer.id;
+      if (answerId) {
+        const awardedAchievements = await onChallengeCompleted(answerId);
+        achievements = await db.query.achievements.findMany({
+          where: inArray(schema.achievements.code, awardedAchievements),
+        });
+      }
+    }
+
+    return res.json({
+      ...response,
+      achievements: achievements,
+    });
   } catch (e) {
     console.log('error', e);
     next(e);

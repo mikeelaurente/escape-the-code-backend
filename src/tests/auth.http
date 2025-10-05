@@ -45,3 +45,8 @@ Authorization: Bearer {{accessToken}}
 GET {{url}}/users/dashboard
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
+
+### Get Achievements
+GET http://localhost:3000/api/achievements
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}

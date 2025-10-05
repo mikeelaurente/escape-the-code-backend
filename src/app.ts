@@ -5,6 +5,7 @@ import userRoutes from './modules/users/users.routes';
 import codeRunnerRoutes from './modules/code-runner/codeRunner.routes';
 import authRoutes from './modules/auth/auth.routes';
 import challengesRoutes from './modules/challenges/challenges.routes';
+import achievementsRoutes from './modules/achievements/achievements.routes';
 import { errorHandler } from './middlewares/errorHandler';
 import path from 'path';
 import { isAuthenticated } from './middlewares/isAuthenticated';
@@ -27,6 +28,7 @@ app.use('/api/users', isAuthenticated, userRoutes);
 app.use('/api/story', isAuthenticated, storyRoutes);
 app.use('/api/challenges', isAuthenticated, challengesRoutes);
 app.use('/api/runner', isAuthenticated, codeRunnerRoutes);
+app.use('/api/achievements', isAuthenticated, achievementsRoutes);
 
 // Global error handler (should be after routes)
 app.use(errorHandler);

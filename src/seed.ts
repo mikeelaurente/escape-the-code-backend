@@ -26,30 +26,6 @@ async function main() {
     await tx.delete(schema.users);
     await tx.delete(schema.achievements);
 
-    /*
-    
-    export const achievements = mysqlTable('achievements', {
-      id: int('id').autoincrement().primaryKey(),
-      title: varchar({ length: 255 }).notNull().unique(),
-      description: varchar({ length: 1024 }).notNull(),
-      difficulty: varchar({ length: 30 })
-        .notNull()
-        .$type<'easy' | 'medium' | 'hard'>(),
-      rewardPoints: int().notNull(),
-      createdAt: timestamp('created_at').notNull().defaultNow(),
-      updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
-    });
-    
-    export const userAchievements = mysqlTable('user_achievements', {
-      id: int('id').autoincrement().primaryKey(),
-      userId: int('user_id').references(() => users.id),
-      achievementId: int('achievement_id').references(() => achievements.id),
-      awardedAt: datetime().notNull(),
-    });
-
-    // Generate Achievements here
-    */
-
     // Seed demo users + credits
     for (let i = 0; i < 5; i++) {
       let salt = await bcrypt.genSalt(10);
@@ -82,12 +58,551 @@ async function main() {
       await updateUserBalance(Number(currentUser?.id), tx);
     }
 
+    const globalAchievements = [
+      // CH1
+      {
+        code: 'CH1_CLEAN_SLATE',
+        icon: 'ti ti-bulb',
+        difficulty: 'easy',
+        title: 'Clean Slate',
+        description: 'Solve your first Chapter 1 challenge.',
+        rewardPoints: 10,
+        creditPoints: 5,
+        rule: { type: 'streak', length: 1, chapterOrder: 1 },
+      },
+      {
+        code: 'CH1_SPEEDY_SPEAKER',
+        icon: 'ti ti-bolt',
+        difficulty: 'medium',
+        title: 'Speedy Speaker',
+        description:
+          'Solve any Chapter 1 printing/strings challenge in under 20 seconds.',
+        rewardPoints: 20,
+        creditPoints: 10,
+        rule: {
+          type: 'time_to_solve_under_seconds',
+          seconds: 20,
+          chapterOrder: 1,
+        },
+      },
+      {
+        code: 'CH1_NO_HINTS_3',
+        icon: 'ti ti-shield-check',
+        difficulty: 'medium',
+        title: 'Pure Intuition (x3)',
+        description: 'Solve 3 challenges in Chapter 1 with no hints.',
+        rewardPoints: 25,
+        creditPoints: 12,
+        rule: { type: 'no_hints_total', count: 3 },
+      },
+      {
+        code: 'CH1_PERFECT',
+        icon: 'ti ti-award',
+        difficulty: 'hard',
+        title: 'Chapter 1: Perfect',
+        description:
+          'Complete all Chapter 1 challenges with zero hints and zero wrong attempts.',
+        rewardPoints: 50,
+        creditPoints: 20,
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 1 — Welcome to Codeville!',
+        },
+      },
+
+      // CH2
+      {
+        code: 'CH2_VARIABLE_VOYAGER',
+        icon: 'ti ti-briefcase',
+        difficulty: 'easy',
+        title: 'Variable Voyager',
+        description: 'Solve any Chapter 2 variable challenge.',
+        rewardPoints: 10,
+        creditPoints: 5,
+        rule: { type: 'streak', length: 1, chapterOrder: 2 },
+      },
+      {
+        code: 'CH2_EVEN_ODD_MASTER',
+        icon: 'ti ti-calculator',
+        difficulty: 'medium',
+        title: 'Even/Odd Master',
+        description: 'Solve 5 challenges in Chapter 2 with ≤ 1 hint each.',
+        rewardPoints: 30,
+        creditPoints: 15,
+        rule: { type: 'limited_hints_per_challenge', maxHints: 1, count: 5 },
+      },
+      {
+        code: 'CH2_PERFECT',
+        icon: 'ti ti-award-filled',
+        difficulty: 'hard',
+        title: 'Chapter 2: Perfect',
+        description:
+          'Complete all Chapter 2 challenges with zero hints and zero wrong attempts.',
+        rewardPoints: 60,
+        creditPoints: 25,
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 2 — Pockets, Paths, and Choices',
+        },
+      },
+
+      // CH3
+      {
+        code: 'CH3_ARRAY_APPRENTICE',
+        icon: 'ti ti-layout-list',
+        difficulty: 'easy',
+        title: 'Array Apprentice',
+        description: 'Solve your first array challenge in Chapter 3.',
+        rewardPoints: 10,
+        creditPoints: 5,
+        rule: { type: 'streak', length: 1, chapterOrder: 3 },
+      },
+      {
+        code: 'CH3_ZERO_HINTS_STREAK_3',
+        icon: 'ti ti-star',
+        difficulty: 'medium',
+        title: 'No-Help Trio',
+        description: 'Get a streak of 3 Chapter 3 solves with no hints.',
+        rewardPoints: 35,
+        creditPoints: 18,
+        rule: { type: 'no_hints_streak', length: 3 },
+      },
+      {
+        code: 'CH3_PERFECT',
+        icon: 'ti ti-bookmarks',
+        difficulty: 'hard',
+        title: 'Chapter 3: Perfect',
+        description:
+          'Complete all Chapter 3 challenges with zero hints and zero wrong attempts.',
+        rewardPoints: 70,
+        creditPoints: 30,
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 3 — Little Lists and Lineups (Arrays)',
+        },
+      },
+
+      // Global
+      {
+        code: 'GLOBAL_DAILY_7',
+        icon: 'ti ti-calendar-stats',
+        difficulty: 'medium',
+        title: 'Week Warrior',
+        description: 'Log activity 7 days in a row.',
+        rewardPoints: 40,
+        creditPoints: 20,
+        rule: { type: 'daily_active_streak', days: 7 },
+      },
+      {
+        code: 'GLOBAL_STREAK_5_NO_WRONG',
+        icon: 'ti ti-fire',
+        difficulty: 'hard',
+        title: 'Flawless Five',
+        description: '5-pass streak with zero wrong attempts on each.',
+        rewardPoints: 80,
+        creditPoints: 35,
+        rule: { type: 'streak', length: 5, withoutWrong: true },
+      },
+      {
+        code: 'GLOBAL_COMMUNITY_HELPER_3',
+        icon: 'ti ti-users',
+        difficulty: 'medium',
+        title: 'Community Helper',
+        description: 'Get 3 community solutions approved.',
+        rewardPoints: 50,
+        creditPoints: 25,
+        rule: { type: 'community_solution_shared', approved: true, count: 3 },
+      },
+    ];
+
+    const achievements = [
+      {
+        code: 'streak_3',
+        title: 'Hot Start',
+        description: 'Solve 3 challenges in a row without a wrong answer.',
+        icon: 'ti ti-flame',
+        difficulty: 'easy',
+        rule: { type: 'streak', length: 3, withoutWrong: true },
+        rewardPoints: 100,
+        creditPoints: 20,
+      },
+      {
+        code: 'streak_10',
+        title: 'On Fire!',
+        description: 'Keep a perfect 10-challenge streak with no mistakes.',
+        icon: 'ti ti-flame',
+        difficulty: 'medium',
+        rule: { type: 'streak', length: 10, withoutWrong: true },
+        rewardPoints: 250,
+        creditPoints: 40,
+      },
+      {
+        code: 'no_hints_streak_5',
+        title: 'Pure Skill',
+        description: 'Complete 5 challenges in a row without using any hints.',
+        icon: 'ti ti-shield-check',
+        difficulty: 'medium',
+        rule: { type: 'no_hints_streak', length: 5 },
+        rewardPoints: 120,
+        creditPoints: 25,
+      },
+      {
+        code: 'no_hints_total_20',
+        title: 'Independent Thinker',
+        description: 'Finish 20 total challenges without using a single hint.',
+        icon: 'ti ti-brain',
+        difficulty: 'hard',
+        rule: { type: 'no_hints_total', count: 20 },
+        rewardPoints: 200,
+        creditPoints: 30,
+      },
+      {
+        code: 'speed_solver_60s',
+        title: 'Lightning Fingers',
+        description: 'Solve a challenge in under 60 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'easy',
+        rule: { type: 'time_to_solve_under_seconds', seconds: 60 },
+        rewardPoints: 80,
+        creditPoints: 15,
+      },
+      {
+        code: 'speed_solver_30s',
+        title: 'Flash Coder',
+        description: 'Solve a challenge in under 30 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'hard',
+        rule: { type: 'time_to_solve_under_seconds', seconds: 30 },
+        rewardPoints: 150,
+        creditPoints: 25,
+      },
+      {
+        code: 'chapter1_perfect',
+        title: 'Perfect Chapter 1',
+        description:
+          'Complete every challenge in Chapter 1 without using any hints.',
+        icon: 'ti ti-trophy',
+        difficulty: 'hard',
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 1 — Welcome to Codeville!',
+        },
+        rewardPoints: 300,
+        creditPoints: 50,
+      },
+      {
+        code: 'daily_streak_7',
+        title: 'Dedicated Learner',
+        description: 'Stay active for 7 days in a row.',
+        icon: 'ti ti-calendar-check',
+        difficulty: 'medium',
+        rule: { type: 'daily_active_streak', days: 7 },
+        rewardPoints: 150,
+        creditPoints: 30,
+      },
+      {
+        code: 'daily_streak_30',
+        title: 'Unstoppable',
+        description: 'Stay active for 30 days straight.',
+        icon: 'ti ti-calendar-stats',
+        difficulty: 'legendary',
+        rule: { type: 'daily_active_streak', days: 30 },
+        rewardPoints: 400,
+        creditPoints: 80,
+      },
+      {
+        code: 'community_share_1',
+        title: 'Helpful Hero',
+        description: 'Share your first approved community solution.',
+        icon: 'ti ti-hand-off',
+        difficulty: 'easy',
+        rule: { type: 'community_solution_shared', approved: true, count: 1 },
+        rewardPoints: 120,
+        creditPoints: 25,
+      },
+      {
+        code: 'community_share_5',
+        title: 'Teacher Spirit',
+        description: 'Share 5 approved community solutions.',
+        icon: 'ti ti-bulb',
+        difficulty: 'medium',
+        rule: { type: 'community_solution_shared', approved: true, count: 5 },
+        rewardPoints: 300,
+        creditPoints: 60,
+      },
+      {
+        code: 'hint_master_3',
+        title: 'Minimalist',
+        description:
+          'Solve 3 challenges while using at most 1 hint per challenge.',
+        icon: 'ti ti-target',
+        difficulty: 'easy',
+        rule: { type: 'limited_hints_per_challenge', maxHints: 1, count: 3 },
+        rewardPoints: 90,
+        creditPoints: 15,
+      },
+      {
+        code: 'hint_master_10',
+        title: 'Hint Ninja',
+        description: 'Solve 10 challenges while using at most 1 hint each.',
+        icon: 'ti ti-eye-off',
+        difficulty: 'hard',
+        rule: { type: 'limited_hints_per_challenge', maxHints: 1, count: 10 },
+        rewardPoints: 200,
+        creditPoints: 35,
+      },
+    ];
+
+    // CHAPTER 2 — Pockets, Paths, and Choices
+    const achievementsChapter2 = [
+      {
+        code: 'c2_streak_5_perfect',
+        title: 'Precision Path',
+        description:
+          'Solve 5 Chapter 2 challenges in a row with no wrong answers.',
+        icon: 'ti ti-flag-check',
+        difficulty: 'medium',
+        rule: {
+          type: 'streak',
+          length: 5,
+          withoutWrong: true,
+          chapterOrder: 2,
+        },
+        rewardPoints: 220,
+        creditPoints: 40,
+      },
+      {
+        code: 'c2_no_hints_streak_5',
+        title: 'Pure Logic',
+        description:
+          'Complete 5 Chapter 2 challenges in a row without using hints.',
+        icon: 'ti ti-shield-check',
+        difficulty: 'medium',
+        rule: { type: 'no_hints_streak', length: 5 },
+        rewardPoints: 180,
+        creditPoints: 35,
+      },
+      {
+        code: 'c2_no_hints_total_10',
+        title: 'Untouched Scripts',
+        description: 'Finish 10 total Chapter 2 challenges without any hints.',
+        icon: 'ti ti-brain',
+        difficulty: 'hard',
+        rule: { type: 'no_hints_total', count: 10 },
+        rewardPoints: 260,
+        creditPoints: 50,
+      },
+      {
+        code: 'c2_speed_solver_45s',
+        title: 'Snappy Thinker',
+        description: 'Solve any Chapter 2 challenge in under 45 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'medium',
+        rule: {
+          type: 'time_to_solve_under_seconds',
+          seconds: 45,
+          chapterOrder: 2,
+        },
+        rewardPoints: 140,
+        creditPoints: 25,
+      },
+      {
+        code: 'c2_speed_solver_20s',
+        title: 'Reflex Coder',
+        description: 'Solve any Chapter 2 challenge in under 20 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'hard',
+        rule: {
+          type: 'time_to_solve_under_seconds',
+          seconds: 20,
+          chapterOrder: 2,
+        },
+        rewardPoints: 220,
+        creditPoints: 35,
+      },
+      {
+        code: 'c2_hint_discipline_1of8',
+        title: 'Minimalist Thinker',
+        description:
+          'Solve 8 Chapter 2 challenges using at most 1 hint per challenge.',
+        icon: 'ti ti-target',
+        difficulty: 'medium',
+        rule: { type: 'limited_hints_per_challenge', maxHints: 1, count: 8 },
+        rewardPoints: 200,
+        creditPoints: 40,
+      },
+      {
+        code: 'c2_chapter_perfect',
+        title: 'Perfect Chapter 2',
+        description:
+          'Complete every challenge in Chapter 2 without using any hints.',
+        icon: 'ti ti-trophy',
+        difficulty: 'hard',
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 2 — Pockets, Paths, and Choices',
+        },
+        rewardPoints: 360,
+        creditPoints: 70,
+      },
+      {
+        code: 'c2_daily_streak_7',
+        title: 'Routine Builder',
+        description: 'Stay active for 7 days in a row during Chapter 2.',
+        icon: 'ti ti-calendar-check',
+        difficulty: 'medium',
+        rule: { type: 'daily_active_streak', days: 7 },
+        rewardPoints: 170,
+        creditPoints: 30,
+      },
+      {
+        code: 'c2_share_3',
+        title: 'Logic Mentor',
+        description: 'Share 3 approved community solutions for Chapter 2.',
+        icon: 'ti ti-bulb',
+        difficulty: 'medium',
+        rule: { type: 'community_solution_shared', approved: true, count: 3 },
+        rewardPoints: 240,
+        creditPoints: 50,
+      },
+    ];
+
+    // CHAPTER 3 — Little Lists and Lineups (Arrays)
+    const achievementsChapter3 = [
+      {
+        code: 'c3_streak_6_perfect',
+        title: 'Array Ace',
+        description:
+          'Solve 6 Chapter 3 challenges in a row with no wrong answers.',
+        icon: 'ti ti-flag-check',
+        difficulty: 'medium',
+        rule: {
+          type: 'streak',
+          length: 6,
+          withoutWrong: true,
+          chapterOrder: 3,
+        },
+        rewardPoints: 240,
+        creditPoints: 45,
+      },
+      {
+        code: 'c3_no_hints_streak_6',
+        title: 'Shelf Sage',
+        description: 'Complete 6 Chapter 3 challenges in a row without hints.',
+        icon: 'ti ti-shield-check',
+        difficulty: 'hard',
+        rule: { type: 'no_hints_streak', length: 6 },
+        rewardPoints: 260,
+        creditPoints: 55,
+      },
+      {
+        code: 'c3_no_hints_total_12',
+        title: 'Untouched Shelves',
+        description: 'Finish 12 total Chapter 3 challenges without any hints.',
+        icon: 'ti ti-brain',
+        difficulty: 'hard',
+        rule: { type: 'no_hints_total', count: 12 },
+        rewardPoints: 320,
+        creditPoints: 60,
+      },
+      {
+        code: 'c3_speed_solver_40s',
+        title: 'Quick Sorter',
+        description: 'Solve any Chapter 3 challenge in under 40 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'medium',
+        rule: {
+          type: 'time_to_solve_under_seconds',
+          seconds: 40,
+          chapterOrder: 3,
+        },
+        rewardPoints: 150,
+        creditPoints: 25,
+      },
+      {
+        code: 'c3_speed_solver_18s',
+        title: 'Rapid Stacker',
+        description: 'Solve any Chapter 3 challenge in under 18 seconds.',
+        icon: 'ti ti-bolt',
+        difficulty: 'hard',
+        rule: {
+          type: 'time_to_solve_under_seconds',
+          seconds: 18,
+          chapterOrder: 3,
+        },
+        rewardPoints: 230,
+        creditPoints: 35,
+      },
+      {
+        code: 'c3_hint_discipline_1of10',
+        title: 'Shelf Minimalist',
+        description:
+          'Solve 10 Chapter 3 challenges using at most 1 hint per challenge.',
+        icon: 'ti ti-target',
+        difficulty: 'medium',
+        rule: { type: 'limited_hints_per_challenge', maxHints: 1, count: 10 },
+        rewardPoints: 220,
+        creditPoints: 45,
+      },
+      {
+        code: 'c3_chapter_perfect',
+        title: 'Perfect Chapter 3',
+        description:
+          'Complete every challenge in Chapter 3 without using any hints.',
+        icon: 'ti ti-trophy',
+        difficulty: 'hard',
+        rule: {
+          type: 'chapter_perfect',
+          chapterTitle: 'Chapter 3 — Little Lists and Lineups (Arrays)',
+        },
+        rewardPoints: 380,
+        creditPoints: 80,
+      },
+      {
+        code: 'c3_daily_streak_7',
+        title: 'Array Regular',
+        description: 'Stay active for 7 days in a row during Chapter 3.',
+        icon: 'ti ti-calendar-check',
+        difficulty: 'medium',
+        rule: { type: 'daily_active_streak', days: 7 },
+        rewardPoints: 170,
+        creditPoints: 30,
+      },
+      {
+        code: 'c3_share_3',
+        title: 'Array Tutor',
+        description: 'Share 3 approved community solutions for Chapter 3.',
+        icon: 'ti ti-bulb',
+        difficulty: 'medium',
+        rule: { type: 'community_solution_shared', approved: true, count: 3 },
+        rewardPoints: 240,
+        creditPoints: 50,
+      },
+    ];
+
+    for (const ach of [
+      achievements,
+      achievementsChapter2,
+      achievementsChapter3,
+      globalAchievements,
+    ].flat()) {
+      await tx.insert(schema.achievements).values({
+        code: ach.code,
+        title: ach.title,
+        description: ach.description,
+        icon: ach.icon,
+        rule: ach.rule as any,
+        difficulty: ach.difficulty as any,
+        rewardPoints: ach.rewardPoints,
+        creditPoints: ach.creditPoints,
+      });
+    }
+
     // Story
     await tx.insert(schema.stories).values({
       title: 'Code Quest: The Sparkling City of JS',
       description:
         'Join Zia and Pax as they explore the Sparkling City of JS. Learn JavaScript basics by solving tiny puzzles to light bridges, open doors, and help friendly bots. No OOP—just the building blocks!',
-      rewardOptions: { easy: 20, medium: 30, hard: 50 },
     });
 
     const story = await tx.query.stories.findFirst({
@@ -102,7 +617,11 @@ async function main() {
       rewardPoints: number;
       creditPoints: number;
       moduleType: 'javascript';
-      hints: string[];
+      hints: {
+        displayText: string;
+        hintText: string; // Markdown
+        cost: number;
+      }[];
     };
 
     type Runnable = { title: string; code: string };
@@ -116,6 +635,7 @@ async function main() {
       runnables: Runnable[];
       trivia: string[]; // << NEW
       additionalResources: LinkRef[]; // << NEW
+      coverImage?: string;
       challenges: Challenge[];
       rewardPoints: number;
       creditPoints: number;
@@ -125,40 +645,43 @@ async function main() {
       title: string;
       description: string;
       sections: Section[];
+      coverImage?: string;
       rewardPoints: number;
       creditPoints: number;
     };
 
-    const REWARD = { easy: 10, medium: 20, hard: 30 };
-    const COMMON_REWARD_OPTIONS = { easy: 20, medium: 30, hard: 50 };
     const testsJson = (tests: Challenge['tests']) => JSON.stringify(tests);
 
-    // ----------------- Chapter 1 -----------------
-    const REWARD_POINTS = { easy: 10, medium: 20, hard: 30 } as const;
-    const CREDIT_POINTS = { easy: 3, medium: 5, hard: 8 } as const;
+    // ----------------- Chapter 1 -----------------//
+    const REWARD = { easy: 10, medium: 20, hard: 30 };
+    const CREDIT = { easy: 5, medium: 10, hard: 15 };
+    const SECTION_BONUS = { rewardPoints: 15, creditPoints: 8 };
 
+    /* ----------------- Chapter 1 ----------------- */
     const chapter1: Chapter = {
+      rewardPoints: 180,
+      creditPoints: 48,
+      coverImage: 'https://cdn.example.com/cover/ch1-welcome.jpg',
       title: 'Chapter 1 — Welcome to Codeville!',
       description:
-        'Zia and Pax arrive at Codeville, a bright city where signs glow when you talk to the computer. In this chapter, learners discover how to print messages, leave friendly notes with comments, and use the number spells for adding, subtracting, multiplying, and dividing. They also learn how parentheses decide which math happens first and how to work with words (strings), including quotes and counting letters. Each lesson is tiny, friendly, and safe for complete beginners. No prior experience is required—every spell is explained slowly with lots of examples.',
+        'Zia and Pax arrive at Codeville and learn to print messages, write comments, use basic arithmetic, control order with parentheses, and work with strings (quotes, joining, and measuring). Everything is gentle and beginner-friendly.',
       sections: [
-        // S1.1 PRINTING ONLY
+        /* S1.1 — PRINTING ONLY */
         {
           title: 'S1.1 — Printing Your First Message',
           description:
-            'Welcome to the console gate! In this lesson, you will learn to “speak” to the screen using console.log. We keep it simple: one command, one friendly message, and instant results. You’ll see how quotes hold your words and how multiple lines show multiple messages. By the end, you’ll feel confident making the computer say exactly what you want.',
+            'Speak to the screen with console.log. Quotes hold your words, and each call prints one line.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p><strong>Zia</strong> and <strong>Pax</strong> meet the mysterious <em>Console Keeper</em>.
-  The Keeper whispers: “If you can make the screen speak, the gate will open!” Zia traces the letters of a tiny spell and the air shimmers as words appear.</p>
+  <p><strong>Zia</strong> and <strong>Pax</strong> meet the Console Keeper: “Make the screen speak and the gate opens!”</p>
 
   <h4>✨ The Secret Spell</h4>
-  <p>Use <code>console.log('text here')</code> to show words on the screen. The computer prints exactly what is inside the quotes.</p>
+  <p>Use <code>console.log('text')</code> to print a line on the screen.</p>
   <ul>
-    <li>Quotes can be single (<code>'...'</code>) or double (<code>"..."</code>).</li>
-    <li>Call <code>console.log</code> again to print another line.</li>
-    <li>Emojis, punctuation, and spaces all appear exactly as written.</li>
+    <li>Single (<code>'...'</code>) or double (<code>"..."</code>) quotes both work.</li>
+    <li>Each call prints on its own line.</li>
+    <li>Emojis, punctuation, and spaces print as written.</li>
   </ul>
 
   <div id="spell"></div>
@@ -187,9 +710,9 @@ async function main() {
             },
           ],
           trivia: [
-            '“Log” means “write it down”; the console is your magic notebook.',
-            'You can print many lines by calling console.log multiple times.',
-            'If nothing appears, check your quotes and parentheses.',
+            '“log” means “write it down”; the console is your magic notebook.',
+            'Quotes are like a treasure box—whatever goes inside prints exactly.',
+            'Print multiple lines by calling console.log multiple times.',
           ],
           additionalResources: [
             {
@@ -197,8 +720,8 @@ async function main() {
               url: 'https://developer.mozilla.org/en-US/docs/Web/API/console/log',
             },
             {
-              title: 'MDN — Expressions and operators (intro)',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators',
+              title: 'MDN — Strings',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String',
             },
           ],
           rewardPoints: 60,
@@ -206,17 +729,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.1 Easy — Say Hello',
-              description: `
-<p><strong>Task:</strong> Show this message exactly: <code>Hello, Codeville!</code></p>
-<ol>
-  <li>Type one line using <code>console.log</code>.</li>
-  <li>Put the words inside quotes.</li>
-  <li>Copy the message exactly (same letters and marks).</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Show exactly: <code>Hello, Codeville!</code></p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 'Hello, Codeville!' },
                 { input: null, expect_print: 'Hello, Codeville!' },
@@ -225,23 +742,31 @@ async function main() {
                 { input: {}, expect_print: 'Hello, Codeville!' },
               ],
               hints: [
-                'Use: console.log("Hello, Codeville!");',
-                'The message must match exactly. Check the comma and the exclamation mark.',
-                '✅ Solution: <code>console.log("Hello, Codeville!");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use console.log with quotes.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'The message must match exactly—check comma and exclamation point.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log("Hello, Codeville!");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.1 Medium — Hello, Name!',
-              description: `
-<p><strong>Task:</strong> The system gives you a name in <code>input</code>. Show: <code>Hello, &lt;name&gt;!</code></p>
-<ol>
-  <li>Use <code>console.log</code> to print <code>Hello, &lt;name&gt;!</code>.</li>
-  <li>Keep the comma and the exclamation mark.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Given a name in <code>input</code>, print <code>Hello, &lt;name&gt;!</code></p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 'Zia', expect_print: 'Hello, Zia!' },
                 { input: 'Pax', expect_print: 'Hello, Pax!' },
@@ -250,22 +775,31 @@ async function main() {
                 { input: '', expect_print: 'Hello, !' },
               ],
               hints: [
-                'Build the sentence: "Hello, " + input + "!"',
-                'Check punctuation carefully.',
-                '✅ Solution: <code>console.log("Hello, " + input + "!");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use string concatenation to add the name.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Keep the comma and exclamation point.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log("Hello, " + input + "!");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.1 Hard — Happy Birthday!',
-              description: `
-<p><strong>Task:</strong> The system gives you a name in <code>input</code>. Show: <code>Happy Birthday, &lt;name&gt;!</code></p>
-<ol>
-  <li>Print exactly with spaces, comma, and exclamation.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Given a name in <code>input</code>, print <code>Happy Birthday, &lt;name&gt;!</code></p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 'Zia', expect_print: 'Happy Birthday, Zia!' },
                 { input: 'Pax', expect_print: 'Happy Birthday, Pax!' },
@@ -274,30 +808,39 @@ async function main() {
                 { input: 'A', expect_print: 'Happy Birthday, A!' },
               ],
               hints: [
-                'Try: "Happy Birthday, " + input + "!"',
-                'Look closely at spaces and punctuation.',
-                '✅ Solution: <code>console.log("Happy Birthday, " + input + "!");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Build the phrase with the given name.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Mind spaces, comma, and exclamation point.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log("Happy Birthday, " + input + "!");</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.2 COMMENTS ONLY
+        /* S1.2 — COMMENTS ONLY */
         {
           title: 'S1.2 — Comments & Neat Code',
           description:
-            'Comments are tiny notes that help people understand code. In this lesson, you will write friendly hints for your future self using // at the start of a line. Comments don’t change what the computer does—they’re just labels and reminders. Clean code with helpful comments is easier to read and fix. Let’s practice making your code kind and tidy.',
+            'Comments are notes for humans. Start a comment with //; the computer ignores it.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>The Keeper smiles: “Clean code is kind code.” Zia writes notes in code so future Zia understands. Pax leaves short labels that tell the story of each line.</p>
+  <p>The Keeper smiles: “Clean code is kind code.” Zia writes notes so future Zia understands.</p>
 
   <h4>✨ The Secret Spell</h4>
-  <p>Start a note with <code>//</code>. The computer ignores everything after <code>//</code> on that line.</p>
-  <ul>
-    <li>Use comments to label steps, explain decisions, or mark TODOs.</li>
-    <li>Short and clear notes help you and your teammates later.</li>
-  </ul>
+  <p>Start a note with <code>//</code>. Everything after <code>//</code> on that line is ignored by the computer.</p>
 
   <div id="spell"></div>
 </div>
@@ -317,9 +860,9 @@ async function main() {
             },
           ],
           trivia: [
-            'Comments are for humans—computers ignore them.',
-            'A short comment is often better than a long one.',
-            'You can put a comment after code on the same line.',
+            'Comments are only for humans—computers ignore them.',
+            'Use comments to label steps and explain decisions.',
+            'You can place a comment after code on the same line.',
           ],
           additionalResources: [
             {
@@ -327,8 +870,8 @@ async function main() {
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types#comments',
             },
             {
-              title: 'MDN — Code readability',
-              url: 'https://developer.mozilla.org/en-US/docs/MDN/Guidelines/Writing_style_guide',
+              title: 'Google JS Style Guide — Comments',
+              url: 'https://google.github.io/styleguide/jsguide.html#formatting-comments',
             },
           ],
           rewardPoints: 60,
@@ -336,17 +879,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.2 Easy — One Note, One Hello',
-              description: `
-<p><strong>Task:</strong> Print <code>Hello!</code></p>
-<ol>
-  <li>Write one comment line above your code (start with <code>//</code>).</li>
-  <li>Then print <code>Hello!</code> using <code>console.log</code>.</li>
-  <li>Only <code>Hello!</code> should appear on screen (notes do not print).</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Write one comment line, then print <code>Hello!</code></p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 'Hello!' },
                 { input: null, expect_print: 'Hello!' },
@@ -355,24 +892,30 @@ async function main() {
                 { input: {}, expect_print: 'Hello!' },
               ],
               hints: [
-                'First line: // your note here',
-                'Second line: console.log("Hello!");',
-                '✅ Solution:<br><code>// note<br>console.log("Hello!");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Start your first line with //.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print exactly Hello! on the next line.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>// note\\nconsole.log("Hello!");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.2 Medium — Keep It Secret',
-              description: `
-<p><strong>Task:</strong> Print <code>I like code</code></p>
-<ol>
-  <li>Write a short comment line with <code>//</code>.</li>
-  <li>On the next line, print <code>I like code</code>.</li>
-  <li>Screen should show only <code>I like code</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Write a short comment, then print <code>I like code</code>.</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: 'I like code' },
                 { input: null, expect_print: 'I like code' },
@@ -381,24 +924,31 @@ async function main() {
                 { input: {}, expect_print: 'I like code' },
               ],
               hints: [
-                'Comment line starts with //',
-                'console.log("I like code");',
-                '✅ Solution:<br><code>// secret<br>console.log("I like code");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Comment line starts with //.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Don’t add extra punctuation.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>// my note\\nconsole.log("I like code");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.2 Hard — Two Notes, One Line',
-              description: `
-<p><strong>Task:</strong> Print <code>Ready</code></p>
-<ol>
-  <li>Write two comment lines at the top.</li>
-  <li>On the third line, print <code>Ready</code>.</li>
-  <li>Only <code>Ready</code> should appear on the screen.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Write two comment lines, then print <code>Ready</code>.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: 'Ready' },
                 { input: null, expect_print: 'Ready' },
@@ -407,31 +957,39 @@ async function main() {
                 { input: {}, expect_print: 'Ready' },
               ],
               hints: [
-                'Use // for each note line.',
-                'Then console.log("Ready");',
-                '✅ Solution:<br><code>// one<br>// two<br>console.log("Ready");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use // for each note line.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print exactly Ready once.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>// note one\\n// note two\\nconsole.log("Ready");</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.3 NUMBERS ADD ONLY
+        /* S1.3 — NUMBERS: ADD */
         {
           title: 'S1.3 — Numbers: Add',
           description:
-            'Numbers are like tiny creatures that can join together. In this lesson, you will use the plus sign to add two numbers. You’ll see how zero changes nothing, how negatives behave, and how results appear instantly. We’ll practice with small and big numbers so you feel comfortable with the spell. Keep your numbers outside quotes—numbers don’t need them.',
+            'Use the + operator to add numbers. Numbers do not need quotes.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>In Coin Corner, gnomes stack shiny coins. Zia learns that numbers can be added together to make bigger piles. Pax tries tiny sums, then huge treasure stacks.</p>
+  <p>In Coin Corner, gnomes stack shiny coins. Numbers join to make bigger piles.</p>
 
   <h4>✨ The Secret Spell</h4>
-  <p>Use <code>+</code> to add. Numbers do <em>not</em> need quotes.</p>
-  <ul>
-    <li><code>2 + 3</code> is <strong>5</strong>.</li>
-    <li>Zero doesn’t change a number: <code>n + 0</code> is <code>n</code>.</li>
-    <li>Negatives work too: <code>-1 + 4</code> is <strong>3</strong>.</li>
-  </ul>
+  <p>Add with <code>a + b</code>. Zero changes nothing; negatives work too.</p>
 
   <div id="spell"></div>
 </div>
@@ -449,18 +1007,18 @@ async function main() {
             },
           ],
           trivia: [
-            'Addition is commutative: a + b is the same as b + a.',
-            'Any number plus zero stays the same—zero is a quiet friend.',
-            'Negative numbers move you left on the number line.',
+            'Addition is commutative: a + b == b + a.',
+            'Zero is the additive identity.',
+            'You can add negatives to move left on the number line.',
           ],
           additionalResources: [
             {
-              title: 'MDN — Arithmetic operators',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Arithmetic_Operators',
+              title: 'MDN — Operators (Arithmetic)',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators#arithmetic_operators',
             },
             {
-              title: 'Khan Academy — Addition and subtraction intro',
-              url: 'https://www.khanacademy.org/math/arithmetic/arith-review-add-subtract',
+              title: 'Khan Academy — Addition intro',
+              url: 'https://www.khanacademy.org/math/arithmetic/addition-subtraction/addition-within-20/v/adding-within-20',
             },
           ],
           rewardPoints: 60,
@@ -468,17 +1026,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.3 Easy — Add 2 and 3',
-              description: `
-<p><strong>Task:</strong> Show the answer to <code>2 + 3</code>.</p>
-<ol>
-  <li>Type one line.</li>
-  <li>Use numbers and <code>+</code>.</li>
-  <li>Print the result.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Print the result of <code>2 + 3</code>.</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 5 },
                 { input: null, expect_print: 5 },
@@ -487,23 +1039,30 @@ async function main() {
                 { input: {}, expect_print: 5 },
               ],
               hints: [
-                'Use: console.log(2 + 3);',
-                'No quotes for numbers.',
-                '✅ Solution: <code>console.log(2 + 3);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use numbers without quotes.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print just the sum.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(2 + 3);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.3 Medium — Add the Given Numbers',
-              description: `
-<p><strong>Task:</strong> The system gives you two numbers in <code>input</code> as <code>[a, b]</code>. Show <code>a + b</code>.</p>
-<ol>
-  <li>Use <code>input[0] + input[1]</code>.</li>
-  <li>Print the sum.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is <code>[a, b]</code>. Print <code>a + b</code>.</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: [2, 3], expect_print: 5 },
                 { input: [10, 5], expect_print: 15 },
@@ -512,23 +1071,30 @@ async function main() {
                 { input: [1000, 2000], expect_print: 3000 },
               ],
               hints: [
-                'Assume input = [a, b].',
-                'Do: console.log(input[0] + input[1]);',
-                '✅ Solution: <code>console.log(input[0] + input[1]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Access items: input[0] and input[1].',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Add them and print once.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(input[0] + input[1]);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.3 Hard — Add a Number and Itself',
-              description: `
-<p><strong>Task:</strong> The system gives you one number in <code>input</code>. Show <code>input + input</code>.</p>
-<ol>
-  <li>Use <code>input + input</code> to double.</li>
-  <li>Print the result.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is a number <code>n</code>. Print <code>n + n</code>.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 1, expect_print: 2 },
                 { input: 5, expect_print: 10 },
@@ -537,29 +1103,41 @@ async function main() {
                 { input: 10000, expect_print: 20000 },
               ],
               hints: [
-                'Double the number: input + input.',
-                'Print only the number.',
-                '✅ Solution: <code>console.log(input + input);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use the same variable twice.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print only the number.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(input + input);</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.4 SUBTRACT / MULTIPLY / DIVIDE
+        /* S1.4 — SUBTRACT / MULTIPLY / DIVIDE (safe divide messaging) */
         {
           title: 'S1.4 — Numbers: Subtract, Multiply, Divide',
           description:
-            'Now you’ll learn three more number spells: take away (subtract), make groups (multiply), and share equally (divide). You’ll see how each changes numbers in a different way and how to read results clearly. We will also talk about dividing by zero and why we print "undefined" to stay safe. Practice each spell so your math gears turn smoothly.',
+            'Use - to subtract, * to multiply, and / to divide. If the divisor is 0, print "undefined" for these puzzles.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>Gears of the Rainbow Bridge spin using math. Zia learns three more spells and watches the bridge light up when answers are correct. Pax experiments with many pairs of numbers to see the patterns.</p>
+  <p>Gears of the Rainbow Bridge spin with math. Different operators change numbers in different ways.</p>
 
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>Subtract: <code>a - b</code></li>
     <li>Multiply: <code>a * b</code></li>
-    <li>Divide: <code>a / b</code> (if <code>b === 0</code>, print <code>"undefined"</code>)</li>
+    <li>Divide: <code>a / b</code> (guard against dividing by 0)</li>
   </ul>
 
   <div id="spell"></div>
@@ -570,22 +1148,22 @@ async function main() {
             { title: 'Spell 2 — multiplication', code: 'console.log(7 * 3);' },
             { title: 'Spell 3 — division', code: 'console.log(12 / 4);' },
             {
-              title: 'Spell 4 — zero division (JS behavior)',
-              code: 'console.log(5 / 0); // Infinity (for learning only)',
+              title: 'Spell 4 — zero division (learning)',
+              code: 'console.log("Guard against 0 in these puzzles");',
             },
           ],
           trivia: [
             'Multiplication is repeated addition.',
             'Division shares a number into equal groups.',
-            'Subtracting can make numbers smaller or even negative.',
+            'Subtracting can result in negative values.',
           ],
           additionalResources: [
             {
               title: 'MDN — Arithmetic operators',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Arithmetic_Operators',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators#arithmetic_operators',
             },
             {
-              title: 'Khan Academy — Multiply & divide',
+              title: 'Khan Academy — Multiplication & division intro',
               url: 'https://www.khanacademy.org/math/arithmetic',
             },
           ],
@@ -594,16 +1172,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.4 Easy — Times Table: 3 × 4',
-              description: `
-<p><strong>Task:</strong> Show the answer to <code>3 * 4</code>.</p>
-<ol>
-  <li>Use numbers and <code>*</code>.</li>
-  <li>Print the result.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Print the result of <code>3 * 4</code>.</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 12 },
                 { input: null, expect_print: 12 },
@@ -612,23 +1185,30 @@ async function main() {
                 { input: {}, expect_print: 12 },
               ],
               hints: [
-                'Use * (star) for multiply.',
-                'console.log(3 * 4);',
-                '✅ Solution: <code>console.log(3 * 4);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use * for multiplication.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print just the number.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(3 * 4);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.4 Medium — Safe Divide',
-              description: `
-<p><strong>Task:</strong> The system gives you two numbers in <code>input</code> as <code>[a, b]</code>. Show <code>a / b</code>. If <code>b</code> is <code>0</code>, print <code>"undefined"</code>.</p>
-<ol>
-  <li>If <code>input[1] === 0</code> → print <code>"undefined"</code>.</li>
-  <li>Else print <code>input[0] / input[1]</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is <code>[a, b]</code>. Print <code>a / b</code>. If <code>b === 0</code>, print <code>"undefined"</code>.</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: [8, 2], expect_print: 4 },
                 { input: [7, 2], expect_print: 3.5 },
@@ -637,24 +1217,31 @@ async function main() {
                 { input: [-10, 2], expect_print: -5 },
               ],
               hints: [
-                'Check input[1] first.',
-                'If it is 0 → print "undefined".',
-                '✅ Solution:<br><code>if (input[1] === 0) { console.log("undefined"); } else { console.log(input[0] / input[1]); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Check the divisor before dividing.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'When b is 0, print the string "undefined".',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>if (input[1] === 0) { console.log("undefined"); } else { console.log(input[0] / input[1]); }</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.4 Hard — Mix: Add Then Multiply',
-              description: `
-<p><strong>Task:</strong> The system gives you numbers in <code>input</code> as <code>[a, b]</code>. Show <code>(a + b) * 2</code>.</p>
-<ol>
-  <li>Add <code>input[0] + input[1]</code>.</li>
-  <li>Multiply the answer by <code>2</code>.</li>
-  <li>Print the final number.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is <code>[a, b]</code>. Print <code>(a + b) * 2</code>.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: [2, 3], expect_print: 10 },
                 { input: [0, 0], expect_print: 0 },
@@ -663,28 +1250,41 @@ async function main() {
                 { input: [100, 1], expect_print: 202 },
               ],
               hints: [
-                'Use parentheses: (input[0] + input[1]) * 2',
-                'Add first, then multiply.',
-                '✅ Solution: <code>console.log((input[0] + input[1]) * 2);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use parentheses to add before multiplying.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print exactly one number.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log((input[0] + input[1]) * 2);</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.5 ORDER OF OPERATIONS
+        /* S1.5 — ORDER OF OPERATIONS */
         {
           title: 'S1.5 — Do First Things First (Parentheses)',
           description:
-            'Sometimes math wants to do many things at once. This lesson shows how parentheses tell math what to do first. You will try expressions with and without parentheses to see the order clearly. Moving the brackets changes the result, which feels like steering a puzzle. Practice slowly and read your results out loud.',
+            'Without parentheses, multiply/divide happen before add/subtract. Parentheses let you choose what runs first.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Puzzle Plaza, signs show numbers and brackets. Zia learns that brackets choose what happens first. Pax moves them around and giggles when the answers change.</p>
+  <p>At Puzzle Plaza, brackets decide what happens first.</p>
 
   <h4>✨ The Secret Spell</h4>
   <ul>
-    <li>Without parentheses, multiply/divide happen before add/subtract.</li>
-    <li>With parentheses <code>()</code>, you choose what happens first.</li>
+    <li>Default order: × and ÷ before + and −.</li>
+    <li>Use <code>()</code> to group operations.</li>
   </ul>
 
   <div id="spell"></div>
@@ -700,27 +1300,27 @@ async function main() {
               code: 'console.log((2 + 3) * 4); // 20',
             },
             {
-              title: 'Spell 3 — more practice A',
+              title: 'Spell 3 — practice A',
               code: 'console.log(1 + 2 * 3 + 4); // 11',
             },
             {
-              title: 'Spell 4 — more practice B',
+              title: 'Spell 4 — practice B',
               code: 'console.log((1 + 2) * (3 + 4)); // 21',
             },
           ],
           trivia: [
-            'The conventional order is often remembered as PEMDAS.',
-            'Parentheses group steps like mini-puzzles.',
-            'You can nest parentheses to control complex expressions.',
+            'PEMDAS/BODMAS are mnemonics for operation order.',
+            'Parentheses act like a spotlight—do this first.',
+            'Moving parentheses can change the result a lot.',
           ],
           additionalResources: [
             {
-              title: 'MDN — Operator precedence',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence',
-            },
-            {
               title: 'Khan Academy — Order of operations',
               url: 'https://www.khanacademy.org/math/arithmetic/arith-review-order-of-operations',
+            },
+            {
+              title: 'MDN — Operator precedence',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence',
             },
           ],
           rewardPoints: 60,
@@ -728,16 +1328,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.5 Easy — No Brackets',
-              description: `
-<p><strong>Task:</strong> The system gives you <code>input = [a, b, c]</code>. Show <code>a + b * c</code>.</p>
-<ol>
-  <li>Do <code>b * c</code> first.</li>
-  <li>Then add <code>a</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [a, b, c]</code>. Print <code>a + b * c</code> (no parentheses).</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: [2, 3, 4], expect_print: 14 },
                 { input: [2, 0, 10], expect_print: 2 },
@@ -746,23 +1341,31 @@ async function main() {
                 { input: [100, 1, 1], expect_print: 101 },
               ],
               hints: [
-                'Multiply first, then add.',
-                'No parentheses here.',
-                '✅ Solution: <code>console.log(input[0] + input[1] * input[2]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Multiply first, then add.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'No parentheses here.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log(input[0] + input[1] * input[2]);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.5 Medium — Use Brackets',
-              description: `
-<p><strong>Task:</strong> The system gives you <code>input = [a, b, c]</code>. Show <code>(a + b) * c</code>.</p>
-<ol>
-  <li>Add <code>a + b</code> inside parentheses.</li>
-  <li>Multiply the result by <code>c</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [a, b, c]</code>. Print <code>(a + b) * c</code>.</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: [2, 3, 4], expect_print: 20 },
                 { input: [2, 0, 10], expect_print: 20 },
@@ -771,24 +1374,31 @@ async function main() {
                 { input: [100, 1, 1], expect_print: 101 },
               ],
               hints: [
-                'Do (input[0] + input[1]) first.',
-                'Then multiply by input[2].',
-                '✅ Solution: <code>console.log((input[0] + input[1]) * input[2]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Add inside parentheses first.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Then multiply by c.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log((input[0] + input[1]) * input[2]);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.5 Hard — Small Puzzle',
-              description: `
-<p><strong>Task:</strong> The system gives you <code>input = [a, b, c]</code>. Show <code>a * (b + c) - a</code>.</p>
-<ol>
-  <li>Add <code>b + c</code> inside <code>()</code>.</li>
-  <li>Multiply by <code>a</code>.</li>
-  <li>Subtract <code>a</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [a, b, c]</code>. Print <code>a * (b + c) - a</code>.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: [2, 3, 4], expect_print: 10 },
                 { input: [1, 1, 1], expect_print: 1 },
@@ -797,28 +1407,41 @@ async function main() {
                 { input: [-2, 3, 1], expect_print: -6 },
               ],
               hints: [
-                'Careful with the steps and signs.',
-                'Use () for b + c.',
-                '✅ Solution: <code>console.log(input[0] * (input[1] + input[2]) - input[0]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Group b + c first.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Multiply by a, then subtract a.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log(input[0] * (input[1] + input[2]) - input[0]);</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.6 STRINGS: QUOTES & ESCAPES
+        /* S1.6 — STRINGS: QUOTES & ESCAPES */
         {
           title: 'S1.6 — Words with Quotes',
           description:
-            'Sometimes your words need quotation marks inside them. In this lesson, you’ll learn two friendly ways to include quotes so your sentence prints perfectly. You can wrap text with one kind of quote and put the other kind inside, or you can escape a quote with a backslash. Practice these tiny tricks to make dialog and contractions look right.',
+            'Place quotes inside strings either by switching outer quotes or escaping with a backslash.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Quote Quay, signs have talking marks. Zia practices printing speech and contractions. Pax experiments until punctuation looks just right.</p>
+  <p>At Quote Quay, Zia prints speech and contractions cleanly.</p>
 
   <h4>✨ The Secret Spell</h4>
   <ul>
-    <li>Use double quotes outside: <code>"It's sunny"</code></li>
-    <li>Or escape inside: <code>'It\\'s sunny'</code></li>
+    <li>Double outside: <code>"It's sunny"</code></li>
+    <li>Escape inside: <code>'It\\'s sunny'</code></li>
   </ul>
 
   <div id="spell"></div>
@@ -839,18 +1462,14 @@ async function main() {
             },
           ],
           trivia: [
-            'Inside/outside quotes are like nesting boxes—pick which one goes where.',
-            'A backslash (\\) is an escape hatch that lets a quote appear safely.',
-            'Both styles are common—choose the one that’s easiest to read.',
+            'Choose inner/outer quotes to avoid escaping.',
+            'A backslash \\ lets a quote appear inside the same quotes.',
+            'Both styles are common—pick the most readable.',
           ],
           additionalResources: [
             {
               title: 'MDN — String literals',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String#string_literals',
-            },
-            {
-              title: 'MDN — Escape sequences',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Character_escape',
             },
           ],
           rewardPoints: 60,
@@ -858,16 +1477,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.6 Easy — It’s Sunny',
-              description: `
-<p><strong>Task:</strong> Show <code>It's sunny</code>.</p>
-<ol>
-  <li>Use quotes correctly so the text is exact.</li>
-  <li>Print the sentence.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Print exactly <code>It's sunny</code>.</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: "It's sunny" },
                 { input: null, expect_print: "It's sunny" },
@@ -876,23 +1490,31 @@ async function main() {
                 { input: {}, expect_print: "It's sunny" },
               ],
               hints: [
-                'Use double quotes outside or escape the single quote.',
-                'Match the text exactly.',
-                '✅ Solution: <code>console.log("It\'s sunny");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText:
+                    'Use double quotes outside, or escape the apostrophe.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Match spacing and casing exactly.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log("It\'s sunny");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.6 Medium — He Said, "Hello".',
-              description: `
-<p><strong>Task:</strong> Show <code>He said, "Hello".</code> (include the double quotes).</p>
-<ol>
-  <li>Choose quotes so it prints correctly.</li>
-  <li>Print the sentence exactly (comma, quotes, period).</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> Print exactly <code>He said, "Hello".</code> (include the double quotes).</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: 'He said, "Hello".' },
                 { input: null, expect_print: 'He said, "Hello".' },
@@ -901,23 +1523,31 @@ async function main() {
                 { input: {}, expect_print: 'He said, "Hello".' },
               ],
               hints: [
-                'Double quotes can be inside single quotes easily.',
-                'Or escape the inner quotes.',
-                '✅ Solution: <code>console.log(\'He said, "Hello".\');</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText:
+                    'Wrap the whole string in single quotes to include double quotes easily.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Check comma and period.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(\'He said, "Hello".\');</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.6 Hard — Name Says a Word',
-              description: `
-<p><strong>Task:</strong> The system gives you <code>input = [name, word]</code>. Show: <code>name says "word"!</code></p>
-<ol>
-  <li>Use the two given values.</li>
-  <li>Put the word inside double quotes in the output.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [name, word]</code>. Print <code>name says "word"!</code></p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: ['Zia', 'Hi'], expect_print: 'Zia says "Hi"!' },
                 {
@@ -929,23 +1559,37 @@ async function main() {
                 { input: ['Name', ''], expect_print: 'Name says ""!' },
               ],
               hints: [
-                'Build the sentence using +.',
-                'Wrap the second value in double quotes in the output.',
-                "✅ Solution: <code>console.log(input[0] + ' says \"' + input[1] + '\"!');</code>",
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Build the sentence using +.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'Wrap the second value in double quotes in the output.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "<code>console.log(input[0] + ' says \"' + input[1] + '\"!');</code>",
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.7 STRINGS: JOIN
+        /* S1.7 — STRINGS: JOIN (no template strings yet) */
         {
           title: 'S1.7 — Joining Words',
           description:
-            'When words need to stand together, we join them with a space. This lesson shows how to glue pieces of text into a single line using the + sign. You’ll see how empty pieces behave while the space stays in the middle. Practice with two and three-word lines to build little sentences. Clear spacing makes signs easy to read.',
+            'Glue pieces of text with +. Add a single space character between words explicitly.',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Sign Street, letters hold hands. Zia learns to join words so names and messages look neat. Pax tests different pieces and watches the spaces line up perfectly.</p>
+  <p>At Sign Street, letters hold hands—spacing makes signs easy to read.</p>
 
   <h4>✨ The Secret Spell</h4>
   <p>Join with a space: <code>'Hello' + ' ' + 'World'</code></p>
@@ -968,18 +1612,14 @@ async function main() {
             },
           ],
           trivia: [
-            'Text is called a string because letters are “strung” together.',
-            'A space is also a character—treat it carefully.',
-            'Joining pieces builds names, labels, and whole sentences.',
+            'A single space is also a character.',
+            'Joining builds names, labels, and sentences.',
+            'Empty strings are valid pieces—keep the space you add.',
           ],
           additionalResources: [
             {
-              title: 'MDN — String',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String',
-            },
-            {
-              title: 'MDN — Operators ( + for string concatenation )',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition',
+              title: 'MDN — String concatenation',
+              url: 'https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/Strings#concatenation',
             },
           ],
           rewardPoints: 60,
@@ -987,17 +1627,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.7 Easy — Join Two Words',
-              description: `
-<p><strong>Task:</strong> The system gives you two words in <code>input = [a, b]</code>. Show them with one space between.</p>
-<ol>
-  <li>Join <code>input[0] + " " + input[1]</code>.</li>
-  <li>Print the result.</li>
-  <li>Do not remove empty words; still keep the one space in the middle.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [a, b]</code>. Print <code>a</code> and <code>b</code> with one space between.</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: ['Hello', 'world'], expect_print: 'Hello world' },
                 { input: ['Red', 'Balloon'], expect_print: 'Red Balloon' },
@@ -1006,23 +1640,31 @@ async function main() {
                 { input: ['', ''], expect_print: ' ' },
               ],
               hints: [
-                'Use: input[0] + " " + input[1]',
-                'Print exactly one space in the middle.',
-                '✅ Solution: <code>console.log(input[0] + " " + input[1]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Add exactly one space between pieces.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Do not trim—empty pieces are allowed.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log(input[0] + " " + input[1]);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.7 Medium — Hello, Name.',
-              description: `
-<p><strong>Task:</strong> The system gives you a name in <code>input</code>. Show: <code>Hello, &lt;name&gt;.</code></p>
-<ol>
-  <li>Join strings with <code>+</code>.</li>
-  <li>Keep the comma after <code>Hello,</code> and add a period at the end.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is a name. Print <code>Hello, &lt;name&gt;.</code></p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 'Zia', expect_print: 'Hello, Zia.' },
                 { input: 'Pax', expect_print: 'Hello, Pax.' },
@@ -1031,23 +1673,32 @@ async function main() {
                 { input: 'World', expect_print: 'Hello, World.' },
               ],
               hints: [
-                '"Hello, " + input + "."',
-                'Keep punctuation.',
-                '✅ Solution: <code>console.log("Hello, " + input + ".");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText:
+                    'Join literal pieces with the name and punctuation.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Keep comma and period.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log("Hello, " + input + ".");</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.7 Hard — Three Words Line',
-              description: `
-<p><strong>Task:</strong> The system gives you three words in <code>input = [a, b, c]</code>. Show: <code>a b c</code> (one space between each).</p>
-<ol>
-  <li>Join them with spaces.</li>
-  <li>If any are empty, still keep spaces in those places.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input = [a, b, c]</code>. Print <code>a b c</code> with exactly one space between each.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: ['bun', 'jam', 'bun'], expect_print: 'bun jam bun' },
                 {
@@ -1059,23 +1710,36 @@ async function main() {
                 { input: ['x', '', 'y'], expect_print: 'x  y' },
               ],
               hints: [
-                'input[0] + " " + input[1] + " " + input[2]',
-                'Do not trim.',
-                '✅ Solution: <code>console.log(input[0] + " " + input[1] + " " + input[2]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Join in order with spaces.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Empty parts still keep their spaces.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>console.log(input[0] + " " + input[1] + " " + input[2]);</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
 
-        // S1.8 STRINGS: LENGTH & FIRST/LAST
+        /* S1.8 — STRINGS: LENGTH & FIRST/LAST */
         {
           title: 'S1.8 — How Long? First and Last',
           description:
-            'Now we measure words! This lesson shows how to count characters, find the first letter, and find the last letter. You’ll see that spaces also count, and empty strings have a length of zero. These tiny tools help with name tags and labels later. Try them slowly—one peek at a time.',
+            'Measure strings with .length, take the first character with [0], and the last with [length - 1].',
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>Letter Counters measure words like rulers. Zia counts names and Pax checks the first and last letters to decorate badges.</p>
+  <p>Letter Counters measure words like rulers. Badges need first and last letters.</p>
 
   <h4>✨ The Secret Spell</h4>
   <ul>
@@ -1083,7 +1747,6 @@ async function main() {
     <li>First letter: <code>word[0]</code></li>
     <li>Last letter: <code>word[word.length - 1]</code></li>
   </ul>
-  <p><em>Tip:</em> Spaces count as characters. Empty strings have length 0.</p>
 
   <div id="spell"></div>
 </div>
@@ -1099,18 +1762,18 @@ async function main() {
               code: "const w='robot'; console.log(w[w.length-1]);",
             },
             {
-              title: 'Spell 4 — empty string length',
+              title: 'Spell 4 — empty length',
               code: "console.log(''.length);",
             },
           ],
           trivia: [
-            'Spaces, punctuation, and emojis all count toward length.',
-            'Indexing starts at 0, so the first letter is [0].',
-            'To get the last letter, use length - 1.',
+            'Spaces, punctuation, and emojis count in length.',
+            'Indexing starts at 0.',
+            'The last index is length - 1.',
           ],
           additionalResources: [
             {
-              title: 'MDN — String.length',
+              title: 'MDN — String length',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length',
             },
             {
@@ -1123,16 +1786,11 @@ async function main() {
           challenges: [
             {
               title: 'S1.8 Easy — Count Letters',
-              description: `
-<p><strong>Task:</strong> The system gives you a word in <code>input</code>. Show how many characters it has.</p>
-<ol>
-  <li>Use <code>input.length</code>.</li>
-  <li>Print the number.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is a word. Print <code>input.length</code>.</p>`,
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: 'cat', expect_print: 3 },
                 { input: 'robot', expect_print: 5 },
@@ -1141,23 +1799,30 @@ async function main() {
                 { input: 'hi there', expect_print: 8 },
               ],
               hints: [
-                'Use input.length.',
-                'Empty string has length 0.',
-                '✅ Solution: <code>console.log(input.length);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use the .length property.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Spaces count too.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: '<code>console.log(input.length);</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.8 Medium — First-Last Format',
-              description: `
-<p><strong>Task:</strong> The system gives you a word in <code>input</code>. Show <code>first-last</code>. If the word is empty, show just <code>-</code>.</p>
-<ol>
-  <li>If <code>input.length === 0</code> → print <code>"-"</code>.</li>
-  <li>Else print <code>input[0]</code>, then <code>"-"</code>, then <code>input[input.length - 1]</code>.</li>
-</ol>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is a word. If empty, print <code>-</code>. Otherwise print <code>first-last</code>.</p>`,
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 'hello', expect_print: 'h-o' },
                 { input: 'Pax', expect_print: 'P-x' },
@@ -1166,22 +1831,31 @@ async function main() {
                 { input: 'ab', expect_print: 'a-b' },
               ],
               hints: [
-                'Check empty first.',
-                'First is input[0]. Last is input[input.length - 1].',
-                '✅ Solution:<br><code>if (input.length===0) { console.log("-"); } else { console.log(input[0] + "-" + input[input.length-1]); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Check for empty first.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Use input[0] and input[input.length - 1].',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>if (input.length === 0) { console.log("-"); } else { console.log(input[0] + "-" + input[input.length - 1]); }</code>',
+                  cost: 8,
+                },
               ],
             },
             {
               title: 'S1.8 Hard — Middle Peek',
-              description: `
-<p><strong>Task:</strong> The system gives you a word in <code>input</code>.
-If it has odd length, show the middle 1 letter.
-If it has even length, show the middle 2 letters.
-If it is empty, show nothing (empty line).</p>`.trim(),
+              description: `<p><strong>Task:</strong> <code>input</code> is a word. If length is odd, print the middle 1 letter; if even, print the middle 2 letters; if empty, print an empty line.</p>`,
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 'cat', expect_print: 'a' },
                 { input: 'code', expect_print: 'od' },
@@ -1190,70 +1864,64 @@ If it is empty, show nothing (empty line).</p>`.trim(),
                 { input: 'robot', expect_print: 'b' },
               ],
               hints: [
-                'Odd middle index: Math.floor(input.length / 2).',
-                'Even: take input.length/2 - 1 and input.length/2.',
-                '✅ Solution:<br><code>const n = input.length;<br>if (n===0) { console.log(""); }<br>else if (n%2===1) { console.log(input[Math.floor(n/2)]); }<br>else { console.log(input[n/2-1] + input[n/2]); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Let n = input.length.',
+                  cost: 3,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'Odd: index Math.floor(n/2). Even: take n/2-1 and n/2.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    '<code>const n = input.length; if (n === 0) { console.log(""); } else if (n % 2 === 1) { console.log(input[Math.floor(n/2)]); } else { console.log(input[n/2 - 1] + input[n/2]); }</code>',
+                  cost: 8,
+                },
               ],
             },
           ],
         },
       ],
-      rewardPoints: 30,
-      creditPoints: 20,
     };
 
-    /* ----------------- Chapter 2 ----------------- */
     const chapter2: Chapter = {
-      rewardPoints: 60,
-      creditPoints: 16,
       title: 'Chapter 2 — Pockets, Paths, and Choices',
+      coverImage: 'https://cdn.example.com/cover/ch2-pockets-paths-choices.jpg',
       description:
-        'Zia and Pax discover satchels where numbers and words can be stored—variables! They learn comparisons and booleans, then use if-statements to make choices. Everything is paced for beginners.',
+        'Zia and Pax discover satchels where numbers and words can be stored—variables! They learn how to compare values and speak in true/false (booleans), then use if-statements to make tiny choices in their code. By gently practicing comparisons and conditions, they unlock doors that open only for the right answers. Each lesson is friendly, slow, and designed for absolute beginners.',
+      rewardPoints: 100, // chapter completion bonus
+      creditPoints: 40, // chapter completion bonus
       sections: [
         // S2.1 VARIABLES
         {
           title: 'S2.1 — Little Pockets (Variables)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch2-01-variables.jpg',
           description:
-            'Variables are pockets for values. Use let for changeable values and const for steady ones. Names should be short and clear. Print what’s inside to see the value.',
+            'Think of variables as little pockets that hold values for later. We use let to create a pocket whose value can change and const for a pocket that should stay the same. Names should be short and clear so future you understands them. In this lesson, you’ll make pockets for words and numbers and print what is inside.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>In the Pack Square, the Pouch Maker hands Zia tiny pockets labeled with names. Pax practices placing numbers and words into pockets and showing them on the screen.</p>
-
-
+  <p>In the Pack Square, the Pouch Maker hands Zia tiny pockets labeled with names. “Put a value here, take it out later,” she says. Pax practices placing numbers and words into pockets and showing them on the screen.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>Create a changeable pocket: <code>let name = 'Zia';</code></li>
     <li>Create a steady pocket: <code>const city = 'Codeville';</code></li>
     <li>Print what’s inside: <code>console.log(name);</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — make a pocket',
-              code: "let name = 'Zia'; console.log(name);",
-            },
-            {
-              title: 'Spell 2 — steady pocket',
-              code: "const city = 'Codeville'; console.log(city);",
-            },
-            {
-              title: 'Spell 3 — change the value',
-              code: "let mood = 'happy'; console.log(mood); mood = 'excited'; console.log(mood);",
-            },
-            {
-              title: 'Spell 4 — numbers in pockets',
-              code: 'let a = 2; let b = 3; console.log(a + b);',
-            },
-          ],
           trivia: [
-            'Use let when a value will change; use const when it should not.',
-            'camelCase names (e.g., favoriteColor) are common in JS.',
-            'Variables save you from retyping values.',
+            'Use <code>let</code> for values that will change; <code>const</code> for values that should stay the same.',
+            'Variable names often use <em>camelCase</em> like <code>favoriteColor</code>.',
+            'Variables help avoid retyping the same literal over and over.',
           ],
           additionalResources: [
             {
@@ -1265,72 +1933,123 @@ If it is empty, show nothing (empty line).</p>`.trim(),
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const',
             },
             {
-              title: 'MDN — Variables',
-              url: 'https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/Variables',
+              title: 'javascript.info — Variables',
+              url: 'https://javascript.info/variables',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — make a pocket',
+              code: "let name = 'Zia'; console.log(name);",
+            },
+            {
+              title: 'Spell — steady pocket',
+              code: "const city = 'Codeville'; console.log(city);",
+            },
+            {
+              title: 'Spell — change the value',
+              code: "let mood='happy'; console.log(mood); mood='excited'; console.log(mood);",
+            },
+            {
+              title: 'Spell — numbers in pockets',
+              code: 'let a=2; let b=3; console.log(a+b);',
+            },
+          ],
           challenges: [
             {
               title: 'S2.1 Easy — Store and Show',
-              description: `
-<p><strong>Task:</strong> Make a variable called <code>pet</code> with value <code>"cat"</code>. Print it.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> Make a variable named <code>pet</code> with the value <code>"cat"</code>. Print it.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 'cat' },
                 { input: null, expect_print: 'cat' },
                 { input: 0, expect_print: 'cat' },
                 { input: 'ignored', expect_print: 'cat' },
-                { input: {}, expect_print: 'cat' },
               ],
               hints: [
-                'Declare with let.',
-                'Print the variable (not the string literal again).',
-                '✅ Solution: <code>let pet = "cat"; console.log(pet);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText:
+                    'Create a variable with let and assign the string "cat".',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'After creating pet, print it using console.log(pet).',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: "let pet = 'cat';\nconsole.log(pet);",
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.1 Medium — Update a Pocket',
-              description: `
-<p><strong>Task:</strong> Create <code>count</code> with value <code>1</code>, change it to <code>2</code>, then print the new value only.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> Make <code>count</code> start at <code>1</code>. Change it to <code>2</code>. Print only the new value.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: 2 },
                 { input: null, expect_print: 2 },
                 { input: 'x', expect_print: 2 },
-                { input: 999, expect_print: 2 },
               ],
               hints: [
-                'Use let so the value can change.',
-                'Print once, after updating.',
-                '✅ Solution: <code>let count = 1; count = 2; console.log(count);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use let so the value can change.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Assign 1, then reassign to 2, and print once.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'let count = 1;\ncount = 2;\nconsole.log(count);',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.1 Hard — Two Pockets, One Sum',
-              description: `
-<p><strong>Task:</strong> Make <code>a = 4</code> and <code>b = 6</code>. Print their sum.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> Make two variables: <code>a = 4</code> and <code>b = 6</code>. Print their sum.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: 10 },
                 { input: null, expect_print: 10 },
                 { input: 'n/a', expect_print: 10 },
-                { input: 0, expect_print: 10 },
               ],
               hints: [
-                'Numbers don’t use quotes.',
-                'Add then print.',
-                '✅ Solution: <code>let a = 4, b = 6; console.log(a + b);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Create two number variables with let.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Add them and print the total.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'let a = 4; let b = 6;\nconsole.log(a + b);',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1339,105 +2058,123 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S2.2 MODULO
         {
           title: 'S2.2 — Sharing Fairly (Remainder %)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch2-02-modulo.jpg',
           description:
-            'Modulo (%) gives the remainder after division. It helps with even/odd checks and repeating patterns.',
+            'Sometimes numbers don’t split evenly. The modulo operator % tells you what’s left over after division. It’s useful for patterns like even/odd and for wrapping around in small cycles. In this lesson, you’ll learn to peek at the remainder and print the result safely.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Circle Court, coins are shared among sprites. The leftover pebble clinks into a bowl—that’s the remainder.</p>
-
-
+  <p>At Circle Court, coins are shared among sprites. When the last sprite gets one coin too few, the remainder pebble clinks into a bowl. Zia listens and counts the leftovers.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
-    <li>Remainder: <code>a % b</code></li>
+    <li>Remainder: <code>a % b</code> (what’s left after dividing a by b)</li>
     <li>Even check: <code>n % 2 === 0</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — simple remainder',
-              code: 'console.log(7 % 3); // 1',
-            },
-            {
-              title: 'Spell 2 — even',
-              code: 'let n = 10; console.log(n % 2 === 0);',
-            },
-            {
-              title: 'Spell 3 — odd',
-              code: 'let n = 11; console.log(n % 2 !== 0);',
-            },
-          ],
           trivia: [
-            '7 % 3 is 1 because 3+3=6 with 1 leftover.',
-            'Modulo is perfect for even/odd.',
-            'Great for cycles like weekdays or indices.',
+            '<code>7 % 3</code> is <code>1</code> because 3+3=6 and 1 is left.',
+            'Modulo helps detect even/odd and repeating patterns.',
+            'Modulo works with negatives in JS (sign follows the dividend).',
           ],
           additionalResources: [
             {
-              title: 'MDN — Arithmetic operators (%)',
+              title: 'MDN — Remainder operator (%)',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Remainder',
             },
             {
-              title: 'Khan Academy — Remainders',
-              url: 'https://www.khanacademy.org/math/arithmetic/arith-review-multiply-divide#arith-review-remainders',
+              title: 'javascript.info — Operators',
+              url: 'https://javascript.info/operators',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            { title: 'Spell — simple remainder', code: 'console.log(7 % 3);' },
+            {
+              title: 'Spell — even',
+              code: 'let n=10; console.log(n % 2 === 0);',
+            },
+            {
+              title: 'Spell — odd',
+              code: 'let n=11; console.log(n % 2 !== 0);',
+            },
+          ],
           challenges: [
             {
               title: 'S2.2 Easy — 10 % 4',
               description:
-                `<p><strong>Task:</strong> Print the remainder of <code>10 % 4</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> Print the remainder when 10 is divided by 4.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 2 },
                 { input: null, expect_print: 2 },
-                { input: 'x', expect_print: 2 },
-                { input: 0, expect_print: 2 },
               ],
               hints: [
-                'Compute directly.',
-                'Print the number only.',
-                '✅ Solution: <code>console.log(10 % 4);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use the remainder operator with 10 % 4.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the numeric result only.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'console.log(10 % 4);',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.2 Medium — Even or Odd',
-              description: `
-<p><strong>Task:</strong> Given a number in <code>input</code>, print <code>"even"</code> if it’s even, otherwise <code>"odd"</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive a number in <code>input</code>. If it is even, print <code>"even"</code>. If it is odd, print <code>"odd"</code>.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 4, expect_print: 'even' },
                 { input: 7, expect_print: 'odd' },
                 { input: 0, expect_print: 'even' },
-                { input: -2, expect_print: 'even' },
                 { input: -3, expect_print: 'odd' },
               ],
               hints: [
-                'Check input % 2.',
-                'Zero counts as even.',
-                '✅ Solution: <code>console.log(input % 2 === 0 ? "even" : "odd");</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Check input % 2 === 0 for even.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'Use an if/else or conditional logic to print the word.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "if (input % 2 === 0) { console.log('even'); } else { console.log('odd'); }",
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.2 Hard — Remainder Label',
-              description: `
-<p><strong>Task:</strong> The system gives <code>input = [a, b]</code>. Print <code>a % b</code>. If <code>b === 0</code>, print <code>"undefined"</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive <code>input</code> as an array <code>[a, b]</code>. Print <code>a % b</code>. If <code>b</code> is <code>0</code>, print <code>"undefined"</code>.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: [7, 3], expect_print: 1 },
                 { input: [10, 5], expect_print: 0 },
@@ -1446,9 +2183,22 @@ If it is empty, show nothing (empty line).</p>`.trim(),
                 { input: [7, -3], expect_print: 1 },
               ],
               hints: [
-                'Guard b === 0.',
-                'Then compute the remainder.',
-                '✅ Solution: <code>if (input[1] === 0) { console.log("undefined"); } else { console.log(input[0] % input[1]); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'First guard for division by zero (b === 0).',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Otherwise print a % b directly.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "const a = input[0]; const b = input[1];\nif (b === 0) { console.log('undefined'); }\nelse { console.log(a % b); }",
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1457,101 +2207,121 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S2.3 COMPARISONS
         {
           title: 'S2.3 — Comparing Things (===, >, <, ≥, ≤)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch2-03-comparisons.jpg',
           description:
-            'Comparisons return true or false. We use strict equality (===) and the usual greater/less signs.',
+            'Computers ask questions by comparing values. The result is true or false, like a tiny yes/no. We will use strict equality (===) and the usual greater/less signs to compare numbers and words. Reading these results helps us make choices later with if-statements.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Balance Bridge, two plates hold values to compare. The pointer flips to “true” or “false”.</p>
-
-
+  <p>At Balance Bridge, two plates hold values to compare. Zia and Pax place numbers on each side and watch the pointer flip to “true” or “false”.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>Equal: <code>a === b</code></li>
     <li>Greater: <code>a > b</code>, Less: <code>a < b</code></li>
     <li>Greater or equal: <code>a >= b</code>, Less or equal: <code>a <= b</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            { title: 'Spell 1 — equals', code: 'console.log(3 === 3);' },
-            { title: 'Spell 2 — greater', code: 'console.log(5 > 2);' },
-            { title: 'Spell 3 — less or equal', code: 'console.log(4 <= 4);' },
-            {
-              title: 'Spell 4 — string compare',
-              code: "console.log('apple' < 'banana');",
-            },
-          ],
           trivia: [
-            '=== checks value and type.',
-            'Comparisons always yield true/false.',
-            'Strings compare lexicographically by code points.',
+            '<code>===</code> checks both value and type; avoid loose <code>==</code> as a beginner.',
+            'Comparisons evaluate to booleans: <code>true</code> or <code>false</code>.',
+            'Strings compare lexicographically: <code>"apple" &lt; "banana"</code> is <code>true</code>.',
           ],
           additionalResources: [
             {
               title: 'MDN — Comparison operators',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Comparison_Operators',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Comparison',
             },
             {
-              title: 'MDN — Equality comparisons',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Equality_comparisons_and_sameness',
+              title: 'javascript.info — Comparison',
+              url: 'https://javascript.info/comparison',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            { title: 'Spell — equals', code: 'console.log(3 === 3);' },
+            { title: 'Spell — greater', code: 'console.log(5 > 2);' },
+            { title: 'Spell — less or equal', code: 'console.log(4 <= 4);' },
+            {
+              title: 'Spell — string compare',
+              code: "console.log('apple' < 'banana');",
+            },
+          ],
           challenges: [
             {
               title: 'S2.3 Easy — True or False',
               description:
-                `<p><strong>Task:</strong> Print the result of <code>7 > 5</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> Print the result of <code>7 &gt; 5</code>.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: true },
                 { input: null, expect_print: true },
-                { input: 0, expect_print: true },
-                { input: 'ignored', expect_print: true },
               ],
               hints: [
-                'Use > to compare.',
-                'Print the boolean directly.',
-                '✅ Solution: <code>console.log(7 > 5);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use the greater-than operator >.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the boolean directly.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'console.log(7 > 5);',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.3 Medium — Check Match',
-              description: `
-<p><strong>Task:</strong> The system gives <code>input = [a, b]</code>. Print <code>true</code> if <code>a === b</code>, else <code>false</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive <code>input</code> as <code>[a, b]</code>. Print <code>true</code> if <code>a === b</code>, otherwise <code>false</code>.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: [3, 3], expect_print: true },
                 { input: [3, 4], expect_print: false },
                 { input: ['5', 5], expect_print: false },
                 { input: ['hi', 'hi'], expect_print: true },
-                { input: ['a', 'b'], expect_print: false },
               ],
               hints: [
-                'Use strict equality.',
-                'Print the comparison directly.',
-                '✅ Solution: <code>console.log(input[0] === input[1]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use strict equality (===).',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Read from input[0] and input[1].',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const a = input[0], b = input[1];\nconsole.log(a === b);',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.3 Hard — Between Check',
-              description: `
-<p><strong>Task:</strong> The system gives <code>input = [n, low, high]</code>. Print <code>true</code> if <code>n</code> is between <code>low</code> and <code>high</code> (inclusive), else <code>false</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive <code>input</code> as <code>[n, low, high]</code>. Print <code>true</code> if <code>n</code> is between <code>low</code> and <code>high</code> (inclusive); otherwise <code>false</code>.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: [5, 1, 5], expect_print: true },
                 { input: [0, 1, 5], expect_print: false },
@@ -1560,9 +2330,22 @@ If it is empty, show nothing (empty line).</p>`.trim(),
                 { input: [7, 7, 7], expect_print: true },
               ],
               hints: [
-                'Use >= and <= with &&.',
-                'Ends are inclusive.',
-                '✅ Solution: <code>console.log(input[0] >= input[1] && input[0] <= input[2]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use >= for the low end and <= for the high end.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Combine with && so both conditions must be true.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const [n, low, high] = input;\nconsole.log(n >= low && n <= high);',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1571,44 +2354,28 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S2.4 LOGIC
         {
           title: 'S2.4 — Tiny Truths (Booleans & Logic)',
+          coverImage: 'https://cdn.example.com/cover/sections/ch2-04-logic.jpg',
           description:
-            'Glue booleans with AND (&&), OR (||), and flip them with NOT (!).',
+            'Booleans are tiny truth values: true or false. We can glue them together with AND (&&), OR (||), and flip them with NOT (!). These building blocks help us ask more than one question at a time.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>In Lantern Lane, lights turn on if switches agree. AND needs both; OR needs at least one; NOT flips the result.</p>
-
-
+  <p>In Lantern Lane, lights turn on if two switches agree. Zia learns the secret signals: AND means both, OR means at least one, and NOT flips the answer.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
-    <li>AND: <code>a && b</code></li>
-    <li>OR: <code>a || b</code></li>
-    <li>NOT: <code>!a</code></li>
+    <li>AND: <code>a && b</code> (true if both are true)</li>
+    <li>OR: <code>a || b</code> (true if at least one is true)</li>
+    <li>NOT: <code>!a</code> (flips true/false)</li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — both true',
-              code: 'console.log(true && true);',
-            },
-            {
-              title: 'Spell 2 — one is enough',
-              code: 'console.log(false || true);',
-            },
-            { title: 'Spell 3 — flip it', code: 'console.log(!false);' },
-            {
-              title: 'Spell 4 — mix with comparisons',
-              code: 'let a=5; console.log(a>=1 && a<=10);',
-            },
-          ],
           trivia: [
-            'AND is like “both switches on”.',
-            'OR is “at least one switch on”.',
-            'NOT flips true ↔ false.',
+            'Think of AND as “both switches on”.',
+            'OR is true if at least one side is true.',
+            'NOT flips the boolean value.',
           ],
           additionalResources: [
             {
@@ -1616,41 +2383,61 @@ If it is empty, show nothing (empty line).</p>`.trim(),
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_Operators',
             },
             {
-              title: 'MDN — Expressions & operators',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators',
+              title: 'javascript.info — Logical operators',
+              url: 'https://javascript.info/logical-operators',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            { title: 'Spell — both true', code: 'console.log(true && true);' },
+            {
+              title: 'Spell — one is enough',
+              code: 'console.log(false || true);',
+            },
+            { title: 'Spell — flip it', code: 'console.log(!false);' },
+            {
+              title: 'Spell — mix with comparisons',
+              code: 'let a=5; console.log(a>=1 && a<=10);',
+            },
+          ],
           challenges: [
             {
               title: 'S2.4 Easy — At Least One',
               description:
-                `<p><strong>Task:</strong> Print the result of <code>true || false</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> Print the result of <code>true || false</code>.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: true },
                 { input: null, expect_print: true },
-                { input: 'x', expect_print: true },
-                { input: 0, expect_print: true },
               ],
               hints: [
-                'OR is true if any side is true.',
-                'Print directly.',
-                '✅ Solution: <code>console.log(true || false);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use the OR operator (||).',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the boolean directly.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'console.log(true || false);',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.4 Medium — In Range AND',
-              description: `
-<p><strong>Task:</strong> Given <code>input</code>, print <code>true</code> if <code>1 &le; input &le; 10</code>, else <code>false</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive a number in <code>input</code>. Print <code>true</code> if <code>1 ≤ input ≤ 10</code>, else <code>false</code>.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 5, expect_print: true },
                 { input: 1, expect_print: true },
@@ -1659,30 +2446,53 @@ If it is empty, show nothing (empty line).</p>`.trim(),
                 { input: 11, expect_print: false },
               ],
               hints: [
-                'Use (input >= 1) && (input <= 10).',
-                'Return the boolean directly.',
-                '✅ Solution: <code>console.log(input >= 1 && input <= 10);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Join (input >= 1) and (input <= 10) with &&.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the boolean result directly.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'console.log(input >= 1 && input <= 10);',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.4 Hard — Not Empty',
-              description: `
-<p><strong>Task:</strong> Given a word in <code>input</code>, print <code>true</code> if it is not empty, else <code>false</code>.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive a string in <code>input</code>. Print <code>true</code> if it is not empty (length &gt; 0), else <code>false</code>.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 'hi', expect_print: true },
                 { input: '', expect_print: false },
                 { input: 'a', expect_print: true },
                 { input: ' ', expect_print: true },
-                { input: 'robot', expect_print: true },
               ],
               hints: [
-                'Use length.',
-                'Flip with ! if needed.',
-                '✅ Solution: <code>console.log(input.length !== 0);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Check input.length > 0.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print true or false accordingly.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'console.log(input.length > 0);',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1691,108 +2501,141 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S2.5 IF
         {
           title: 'S2.5 — If This, Then That',
+          coverImage: 'https://cdn.example.com/cover/sections/ch2-05-if.jpg',
           description:
-            'A single if runs code when a condition is true; otherwise it does nothing.',
+            'If-statements let your code make a choice. When a condition is true, a block of code runs; otherwise it is skipped. We start with a single if to keep it simple.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Choice Corner, a door opens only if you say the secret number.</p>
-
-
+  <p>At Choice Corner, a door opens only if you say the secret number. Zia learns to test a condition and speak when it’s true.</p>
   <h4>✨ The Secret Spell</h4>
   <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;"><code>if (condition) {
   console.log('Yes!');
 }</code></pre>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — simple if',
-              code: "let n=3; if (n>2) { console.log('big'); }",
-            },
-            {
-              title: 'Spell 2 — no print when false',
-              code: "let n=1; if (n>2) { console.log('big'); }",
-            },
-          ],
           trivia: [
-            'If nothing prints, the condition was false.',
-            'Conditions are booleans built from comparisons.',
-            'Curly braces hold the code to run.',
+            'If the condition is false, the body does not run.',
+            'Conditions usually use comparisons and booleans.',
+            'Curly braces <code>{}</code> hold the code to run when true.',
           ],
           additionalResources: [
             {
               title: 'MDN — if...else',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/if...else',
             },
+            {
+              title: 'javascript.info — Conditional operators',
+              url: 'https://javascript.info/ifelse',
+            },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — simple if',
+              code: "let n=3; if (n>2) { console.log('big'); }",
+            },
+            {
+              title: 'Spell — no print when false',
+              code: "let n=1; if (n>2) { console.log('big'); }",
+            },
+          ],
           challenges: [
             {
               title: 'S2.5 Easy — If Nice',
-              description: `
-<p><strong>Task:</strong> If <code>input > 5</code>, print <code>"nice"</code>. Otherwise, print nothing.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive a number in <code>input</code>. If <code>input &gt; 5</code>, print <code>"nice"</code>. Otherwise, print nothing.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: 6, expect_print: 'nice' },
                 { input: 5, expect_print: '' },
-                { input: 10, expect_print: 'nice' },
                 { input: -1, expect_print: '' },
-                { input: 0, expect_print: '' },
               ],
               hints: [
-                'Use if (input > 5).',
-                'Print only when true.',
-                '✅ Solution: <code>if (input > 5) { console.log("nice"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use if (input > 5) { ... }',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Only print inside the true branch.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: "if (input > 5) { console.log('nice'); }",
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.5 Medium — If Even',
-              description: `
-<p><strong>Task:</strong> If <code>input</code> is even, print <code>"even"</code>. Else, print nothing.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive <code>input</code>. If it is even, print <code>"even"</code>. Else, print nothing.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 8, expect_print: 'even' },
                 { input: 3, expect_print: '' },
                 { input: 0, expect_print: 'even' },
-                { input: -2, expect_print: 'even' },
-                { input: 11, expect_print: '' },
               ],
               hints: [
-                'Use input % 2 === 0.',
-                'Print only when true.',
-                '✅ Solution: <code>if (input % 2 === 0) { console.log("even"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Even means input % 2 === 0.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print only when the condition is true.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: "if (input % 2 === 0) { console.log('even'); }",
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.5 Hard — If In Range',
-              description: `
-<p><strong>Task:</strong> If <code>1 &le; input &le; 10</code>, print <code>"ok"</code>. Else, print nothing.</p>`.trim(),
+              description:
+                '<p><strong>Task:</strong> You receive <code>input</code>. If <code>1 &le; input &le; 10</code>, print <code>"ok"</code>. Else, print nothing.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 1, expect_print: 'ok' },
                 { input: 10, expect_print: 'ok' },
                 { input: 0, expect_print: '' },
                 { input: 11, expect_print: '' },
-                { input: -5, expect_print: '' },
               ],
               hints: [
-                'Use input >= 1 && input <= 10.',
-                'Print only when true.',
-                '✅ Solution: <code>if (input >= 1 && input <= 10) { console.log("ok"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use input >= 1 && input <= 10.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Only print when the check is true.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "if (input >= 1 && input <= 10) { console.log('ok'); }",
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1801,110 +2644,146 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S2.6 IF/ELSE
         {
           title: 'S2.6 — Choose A or B (if/else)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch2-06-if-else.jpg',
           description:
-            'if/else chooses between two branches so your code always prints one message.',
+            'Now we add an else part: if the condition is true, do one thing; otherwise, do another. This makes the program speak in two possible ways. Practice with simple choices like even/odd to get comfortable.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At the Fork Gate, a sign points left or right. The program chooses a path.</p>
-
-
+  <p>At the Fork Gate, a sign points left or right. Zia learns to choose paths using if/else so the code always picks one message.</p>
   <h4>✨ The Secret Spell</h4>
   <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;"><code>if (condition) {
   console.log('A');
 } else {
   console.log('B');
 }</code></pre>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — even/odd',
-              code: "let n=7; if (n%2===0){console.log('even');} else {console.log('odd');}",
-            },
-            {
-              title: 'Spell 2 — pass/fail',
-              code: "let score=6; if (score>=5){console.log('pass');} else {console.log('try again');}",
-            },
-          ],
           trivia: [
-            'Exactly one branch runs.',
-            'Conditions can use comparisons and logic.',
-            'Keep branch messages short and clear.',
+            'Exactly one branch runs—never both.',
+            'Use clear, short messages in each branch.',
+            'Conditions can use comparisons, modulo, and logic.',
           ],
           additionalResources: [
             {
               title: 'MDN — if...else',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/if...else',
             },
+            {
+              title: 'javascript.info — Conditional branching',
+              url: 'https://javascript.info/ifelse',
+            },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — even/odd',
+              code: "let n=7; if (n%2===0){console.log('even');} else {console.log('odd');}",
+            },
+            {
+              title: 'Spell — pass/fail',
+              code: "let score=6; if (score>=5){console.log('pass');} else {console.log('try again');}",
+            },
+          ],
           challenges: [
             {
               title: 'S2.6 Easy — Even/Odd',
               description:
-                `<p><strong>Task:</strong> Given <code>input</code>, print <code>"even"</code> if even, otherwise <code>"odd"</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> You receive <code>input</code>. Print <code>"even"</code> if even, otherwise <code>"odd"</code>.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: 4, expect_print: 'even' },
                 { input: 9, expect_print: 'odd' },
                 { input: 0, expect_print: 'even' },
-                { input: -2, expect_print: 'even' },
-                { input: -3, expect_print: 'odd' },
               ],
               hints: [
-                'Use modulo 2 and if/else.',
-                'Zero is even.',
-                '✅ Solution: <code>if (input % 2 === 0) { console.log("even"); } else { console.log("odd"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use if/else with input % 2 === 0.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print exactly "even" or "odd".',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "if (input % 2 === 0) { console.log('even'); } else { console.log('odd'); }",
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S2.6 Medium — Age Gate',
               description:
-                `<p><strong>Task:</strong> Given <code>input</code> as an age, print <code>"allowed"</code> if <code>input &ge; 13</code>, else <code>"blocked"</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> You receive <code>input</code> as <code>age</code>. If <code>age &ge; 13</code>, print <code>"allowed"</code>. Else print <code>"blocked"</code>.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: 13, expect_print: 'allowed' },
                 { input: 12, expect_print: 'blocked' },
                 { input: 18, expect_print: 'allowed' },
-                { input: 0, expect_print: 'blocked' },
-                { input: 100, expect_print: 'allowed' },
               ],
               hints: [
-                'Use >= 13.',
-                'Print exactly the words.',
-                '✅ Solution: <code>if (input >= 13) { console.log("allowed"); } else { console.log("blocked"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Compare input against 13 using >=.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Choose one of two messages with else.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "if (input >= 13) { console.log('allowed'); } else { console.log('blocked'); }",
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S2.6 Hard — Inside or Outside',
               description:
-                `<p><strong>Task:</strong> Given <code>input</code>, print <code>"inside"</code> if <code>1 &le; input &le; 10</code>, else <code>"outside"</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> You receive a number in <code>input</code>. If <code>1 ≤ input ≤ 10</code>, print <code>"inside"</code>. Else print <code>"outside"</code>.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: 1, expect_print: 'inside' },
                 { input: 10, expect_print: 'inside' },
                 { input: 0, expect_print: 'outside' },
                 { input: 11, expect_print: 'outside' },
-                { input: -5, expect_print: 'outside' },
               ],
               hints: [
-                'Combine two comparisons with &&.',
-                'Exactly one word prints.',
-                '✅ Solution: <code>if (input >= 1 && input <= 10) { console.log("inside"); } else { console.log("outside"); }</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Join two comparisons with &&.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Remember to print exactly one word.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    "if (input >= 1 && input <= 10) { console.log('inside'); } else { console.log('outside'); }",
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -1912,125 +2791,157 @@ If it is empty, show nothing (empty line).</p>`.trim(),
       ],
     };
 
-    /* ----------------- Chapter 3 ----------------- */
     const chapter3: Chapter = {
-      rewardPoints: 60,
-      creditPoints: 16,
       title: 'Chapter 3 — Little Lists and Lineups (Arrays)',
+      coverImage: 'https://cdn.example.com/cover/ch3-lists-lineups-arrays.jpg',
       description:
-        'Arrays store ordered lists of values. Create arrays, count items, pick by position, and add/remove items at the ends.',
+        'Zia and Pax find shelves where many values sit in order—these are arrays. They learn to create arrays, count how many items there are, and pick items by position. Then they practice adding and removing items at the ends. Everything stays beginner-friendly, with careful steps, clear examples, and tiny challenges.',
+      rewardPoints: 80, // chapter completion bonus
+      creditPoints: 30, // chapter completion bonus
       sections: [
         // S3.1 CREATE ARRAYS
         {
           title: 'S3.1 — Make a Line (Create Arrays)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch3-01-create-arrays.jpg',
           description:
-            'An array is a lineup of values inside square brackets. Items are separated by commas. You can mix numbers and strings.',
+            'An array is a lineup of values inside square brackets. Items are separated by commas, and you can mix numbers and strings. Start with small arrays and print them to see what they look like.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At Shelf Square, bottles line up in a neat row. Zia places labels in an array to keep them together.</p>
-
-
+  <p>At Shelf Square, bottles line up in a neat row. Zia places labels in an array to keep them together, while Pax counts how many bottles are on the shelf.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>Create: <code>let colors = ['red', 'blue'];</code></li>
     <li>Print the whole array: <code>console.log(colors);</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — two colors',
-              code: "let colors=['red','blue']; console.log(colors);",
-            },
-            {
-              title: 'Spell 2 — mixed items',
-              code: "let stuff=['cup',3,'hat']; console.log(stuff);",
-            },
-            {
-              title: 'Spell 3 — empty shelf',
-              code: 'let empty=[]; console.log(empty);',
-            },
-          ],
           trivia: [
-            'Arrays remember item order.',
-            'You can store mixed types.',
-            'Empty array [] has length 0.',
+            'Arrays remember the order of items.',
+            'You can mix strings and numbers in one array.',
+            'Empty array <code>[]</code> has length 0.',
           ],
           additionalResources: [
             {
               title: 'MDN — Arrays',
-              url: 'https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/Arrays',
-            },
-            {
-              title: 'MDN — Array (reference)',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array',
             },
+            {
+              title: 'javascript.info — Arrays',
+              url: 'https://javascript.info/array',
+            },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — two colors',
+              code: "let colors=['red','blue']; console.log(colors);",
+            },
+            {
+              title: 'Spell — mixed items',
+              code: "let stuff=['cup',3,'hat']; console.log(stuff);",
+            },
+            {
+              title: 'Spell — empty shelf',
+              code: 'let empty=[]; console.log(empty);',
+            },
+          ],
           challenges: [
             {
               title: 'S3.1 Easy — Two Pets',
               description:
-                `<p><strong>Task:</strong> Create <code>["cat","dog"]</code> and print it.</p>`.trim(),
+                '<p><strong>Task:</strong> Create <code>["cat","dog"]</code> and print the array.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: '["cat","dog"]' },
                 { input: null, expect_print: '["cat","dog"]' },
-                { input: 'ignored', expect_print: '["cat","dog"]' },
-                { input: 0, expect_print: '["cat","dog"]' },
               ],
               hints: [
-                'Use [] and commas.',
-                'Print the array variable.',
-                '✅ Solution: <code>const pets = ["cat","dog"]; console.log(JSON.stringify(pets));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use square brackets with a comma between items.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the entire array variable.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const pets = ["cat","dog"]; console.log(JSON.stringify(pets));',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S3.1 Medium — Three Numbers',
               description:
-                `<p><strong>Task:</strong> Create <code>[1,2,3]</code> and print it.</p>`.trim(),
+                '<p><strong>Task:</strong> Create <code>[1,2,3]</code> and print it as an array.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: '[1,2,3]' },
                 { input: null, expect_print: '[1,2,3]' },
-                { input: 'n/a', expect_print: '[1,2,3]' },
-                { input: 42, expect_print: '[1,2,3]' },
               ],
               hints: [
-                'No quotes for numbers.',
-                'Separate with commas.',
-                '✅ Solution: <code>const a=[1,2,3]; console.log(JSON.stringify(a));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Numbers do not need quotes.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText:
+                    'Use JSON.stringify to match exact print if needed.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const nums = [1,2,3]; console.log(JSON.stringify(nums));',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S3.1 Hard — Mixed Trio',
               description:
-                `<p><strong>Task:</strong> Create <code>["sun",7,"moon"]</code> and print it.</p>`.trim(),
+                '<p><strong>Task:</strong> Create <code>["sun",7,"moon"]</code> and print it as an array.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: '["sun",7,"moon"]' },
                 { input: null, expect_print: '["sun",7,"moon"]' },
-                { input: 0, expect_print: '["sun",7,"moon"]' },
-                { input: 'x', expect_print: '["sun",7,"moon"]' },
               ],
               hints: [
-                'Strings need quotes; numbers don’t.',
-                'Keep order.',
-                '✅ Solution: <code>const a=["sun",7,"moon"]; console.log(JSON.stringify(a));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Mix strings and numbers appropriately.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Match the exact order.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const a = ["sun",7,"moon"]; console.log(JSON.stringify(a));',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -2039,106 +2950,138 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S3.2 LENGTH
         {
           title: 'S3.2 — How Many? (.length)',
-          description: 'Use the length property to count items in an array.',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch3-02-length.jpg',
+          description:
+            'Arrays know how many items they have. The length property tells you the count. We’ll try it with empty arrays and longer ones to see how it changes.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>The Counter Clock ticks each time an item joins the lineup.</p>
-
-
+  <p>The Counter Clock ticks each time an item joins the lineup. Zia watches the number change as she adds or removes items.</p>
   <h4>✨ The Secret Spell</h4>
-  <ul><li>Count: <code>array.length</code></li></ul>
-
-
+  <ul>
+    <li>Count: <code>array.length</code></li>
+  </ul>
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — count two',
-              code: "let colors=['red','blue']; console.log(colors.length);",
-            },
-            {
-              title: 'Spell 2 — count empty',
-              code: 'let a=[]; console.log(a.length);',
-            },
-            {
-              title: 'Spell 3 — count three',
-              code: "let a=['x','y','z']; console.log(a.length);",
-            },
-          ],
           trivia: [
             'Empty array has length 0.',
             'Length grows and shrinks as items change.',
-            'Strings also have .length.',
+            'Strings also have <code>.length</code>.',
           ],
           additionalResources: [
             {
               title: 'MDN — Array.length',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/length',
             },
+            {
+              title: 'javascript.info — Arrays',
+              url: 'https://javascript.info/array',
+            },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — count two',
+              code: "let colors=['red','blue']; console.log(colors.length);",
+            },
+            {
+              title: 'Spell — count empty',
+              code: 'let a=[]; console.log(a.length);',
+            },
+            {
+              title: 'Spell — count three',
+              code: "let a=['x','y','z']; console.log(a.length);",
+            },
+          ],
           challenges: [
             {
               title: 'S3.2 Easy — Count 3',
               description:
-                `<p><strong>Task:</strong> Print the length of <code>["a","b","c"]</code>.</p>`.trim(),
+                '<p><strong>Task:</strong> Print the length of <code>["a","b","c"]</code>.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 3 },
                 { input: null, expect_print: 3 },
-                { input: 'x', expect_print: 3 },
-                { input: 0, expect_print: 3 },
               ],
               hints: [
-                'Use .length.',
-                'Print the number.',
-                '✅ Solution: <code>console.log(["a","b","c"].length);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Put the array into a variable.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print variable.length.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr = ["a","b","c"]; console.log(arr.length);',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S3.2 Medium — Length of Empty',
               description:
-                `<p><strong>Task:</strong> Make an empty array and print its length.</p>`.trim(),
+                '<p><strong>Task:</strong> Make an empty array and print its length.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: 0 },
                 { input: null, expect_print: 0 },
-                { input: 'ignored', expect_print: 0 },
-                { input: {}, expect_print: 0 },
               ],
               hints: [
-                '[] makes an empty array.',
-                'Length is 0.',
-                '✅ Solution: <code>const a=[]; console.log(a.length);</code>',
+                { displayText: 'Hint 1', hintText: 'Use [].', cost: 7 },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'The length of [] is 0.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'const a = []; console.log(a.length);',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S3.2 Hard — Count Mixed',
               description:
-                `<p><strong>Task:</strong> Create <code>["a",1,"b",2]</code>. Print its length.</p>`.trim(),
+                '<p><strong>Task:</strong> Create <code>["a", 1, "b", 2]</code> and print its length.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: 4 },
                 { input: null, expect_print: 4 },
-                { input: 'x', expect_print: 4 },
-                { input: 0, expect_print: 4 },
               ],
               hints: [
-                'Length counts all items, any type.',
-                'Print once.',
-                '✅ Solution: <code>const a=["a",1,"b",2]; console.log(a.length);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Combine strings and numbers in one array.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print .length once.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText: 'const a = ["a",1,"b",2]; console.log(a.length);',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -2147,110 +3090,133 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S3.3 INDEXING
         {
           title: 'S3.3 — First, Middle, Last (Indexing)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch3-03-indexing.jpg',
           description:
-            'Pick items by position using square brackets. First is index 0; last is length - 1.',
+            'We pick items by position using square brackets. Positions start at 0 for the first item. You will print the first and last items, and try middle positions to practice. Be careful not to go past the ends.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>Index Isle has stepping stones numbered from 0.</p>
-
-
+  <p>Index Isle has stepping stones numbered starting from 0. Zia hops to the right stone to pick an item from the lineup.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>First: <code>a[0]</code></li>
     <li>Last: <code>a[a.length - 1]</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — first item',
-              code: "let a=['red','green','blue']; console.log(a[0]);",
-            },
-            {
-              title: 'Spell 2 — last item',
-              code: "let a=['red','green','blue']; console.log(a[a.length-1]);",
-            },
-            {
-              title: 'Spell 3 — middle item',
-              code: "let a=['sun','moon','star']; console.log(a[1]);",
-            },
-          ],
           trivia: [
-            'Indexing starts at 0.',
-            'Last item is length - 1.',
-            'Past-the-end gives undefined.',
+            'Indexing starts at 0, not 1.',
+            'The last index is length - 1.',
+            'Going past the ends returns <code>undefined</code>.',
           ],
           additionalResources: [
             {
-              title: 'MDN — Property accessors',
-              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_Accessors',
+              title: 'MDN — Arrays',
+              url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array',
+            },
+            {
+              title: 'javascript.info — Arrays',
+              url: 'https://javascript.info/array',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — first item',
+              code: "let a=['red','green','blue']; console.log(a[0]);",
+            },
+            {
+              title: 'Spell — last item',
+              code: "let a=['red','green','blue']; console.log(a[a.length-1]);",
+            },
+            {
+              title: 'Spell — middle item',
+              code: "let a=['sun','moon','star']; console.log(a[1]);",
+            },
+          ],
           challenges: [
             {
               title: 'S3.3 Easy — First Fruit',
               description:
-                `<p><strong>Task:</strong> From <code>["apple","banana","pear"]</code>, print the first item.</p>`.trim(),
+                '<p><strong>Task:</strong> From <code>["apple","banana","pear"]</code>, print the first item.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: 'apple' },
                 { input: null, expect_print: 'apple' },
-                { input: 'x', expect_print: 'apple' },
-                { input: 0, expect_print: 'apple' },
               ],
               hints: [
-                'Index 0 is first.',
-                'Print that value.',
-                '✅ Solution: <code>console.log(["apple","banana","pear"][0]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Indexes start at 0.',
+                  cost: 5,
+                },
+                { displayText: 'Hint 2', hintText: 'Use arr[0].', cost: 5 },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr = ["apple","banana","pear"]; console.log(arr[0]);',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S3.3 Medium — Last Color',
               description:
-                `<p><strong>Task:</strong> From <code>["red","green","blue"]</code>, print the last item.</p>`.trim(),
+                '<p><strong>Task:</strong> From <code>["red","green","blue"]</code>, print the last item.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: 'blue' },
                 { input: null, expect_print: 'blue' },
-                { input: 'x', expect_print: 'blue' },
-                { input: 0, expect_print: 'blue' },
               ],
               hints: [
-                'Use length - 1.',
-                'Then access that index.',
-                '✅ Solution: <code>const a=["red","green","blue"]; console.log(a[a.length-1]);</code>',
+                { displayText: 'Hint 1', hintText: 'Use length - 1.', cost: 7 },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Access arr[arr.length - 1].',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr = ["red","green","blue"]; console.log(arr[arr.length - 1]);',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S3.3 Hard — Middle Animal',
               description:
-                `<p><strong>Task:</strong> From <code>["ant","bear","cat","dog","eel"]</code>, print the middle (index 2).</p>`.trim(),
+                '<p><strong>Task:</strong> From <code>["ant","bear","cat","dog","eel"]</code>, print the middle item (index 2).</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: 'cat' },
                 { input: null, expect_print: 'cat' },
-                { input: 'ignored', expect_print: 'cat' },
-                { input: 0, expect_print: 'cat' },
               ],
               hints: [
-                'Count from 0: 0,1,2,3,4.',
-                'Pick index 2.',
-                '✅ Solution: <code>console.log(["ant","bear","cat","dog","eel"][2]);</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Count 0,1,2,3,4 — the middle is 2.',
+                  cost: 9,
+                },
+                { displayText: 'Hint 2', hintText: 'Access arr[2].', cost: 9 },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr = ["ant","bear","cat","dog","eel"]; console.log(arr[2]);',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -2259,114 +3225,145 @@ If it is empty, show nothing (empty line).</p>`.trim(),
         // S3.4 PUSH / POP
         {
           title: 'S3.4 — Add & Remove (push, pop)',
+          coverImage:
+            'https://cdn.example.com/cover/sections/ch3-04-push-pop.jpg',
           description:
-            'Use push to add to the end of an array, and pop to remove the last item.',
+            'Arrays can grow and shrink at the end. Use push to add one item to the end, and pop to remove the last item. Practice adding two items and popping one to see the lineup change.',
+          rewardPoints: SECTION_BONUS.rewardPoints,
+          creditPoints: SECTION_BONUS.creditPoints,
           content: `
 <div style="display:flex;flex-direction:column;gap:20px;margin:auto;">
   <h4>🗺️ The Encounter</h4>
-  <p>At End Dock, a ferry brings new items and takes the last one away.</p>
-
-
+  <p>At End Dock, a ferry brings new items to the lineup and takes the last one away. Zia adds labels with push and removes them with pop.</p>
   <h4>✨ The Secret Spell</h4>
   <ul>
     <li>Add to end: <code>a.push('new')</code></li>
     <li>Remove last: <code>a.pop()</code></li>
   </ul>
-
-
   <div id="spell"></div>
 </div>
       `.trim(),
-          runnables: [
-            {
-              title: 'Spell 1 — push one',
-              code: "let a=['red']; a.push('blue'); console.log(a);",
-            },
-            {
-              title: 'Spell 2 — push two',
-              code: "let a=['sun']; a.push('moon'); a.push('star'); console.log(a);",
-            },
-            {
-              title: 'Spell 3 — pop one',
-              code: "let a=['A','B','C']; a.pop(); console.log(a);",
-            },
-          ],
           trivia: [
-            'push returns the new length.',
-            'pop returns the removed item.',
+            '<code>push</code> returns the new length.',
+            '<code>pop</code> returns the removed item.',
             'Arrays are flexible shelves—easy to grow or shrink.',
           ],
           additionalResources: [
             {
-              title: 'MDN — Array.prototype.push()',
+              title: 'MDN — Array.push',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/push',
             },
             {
-              title: 'MDN — Array.prototype.pop()',
+              title: 'MDN — Array.pop',
               url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/pop',
             },
           ],
-          rewardPoints: 60,
-          creditPoints: 16,
+          runnables: [
+            {
+              title: 'Spell — push one',
+              code: "let a=['red']; a.push('blue'); console.log(a);",
+            },
+            {
+              title: 'Spell — push two',
+              code: "let a=['sun']; a.push('moon'); a.push('star'); console.log(a);",
+            },
+            {
+              title: 'Spell — pop one',
+              code: "let a=['A','B','C']; a.pop(); console.log(a);",
+            },
+          ],
           challenges: [
             {
               title: 'S3.4 Easy — Add One',
               description:
-                `<p><strong>Task:</strong> Start with <code>["a"]</code>. Add <code>"b"</code> to the end and print the result.</p>`.trim(),
+                '<p><strong>Task:</strong> Start with <code>["a"]</code>. Add <code>"b"</code> to the end and print the array.</p>',
               difficulty: 'easy',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.easy,
-              creditPoints: CREDIT_POINTS.easy,
+              rewardPoints: REWARD.easy,
+              creditPoints: CREDIT.easy,
               tests: [
                 { input: '', expect_print: '["a","b"]' },
                 { input: null, expect_print: '["a","b"]' },
-                { input: 'x', expect_print: '["a","b"]' },
-                { input: 0, expect_print: '["a","b"]' },
               ],
               hints: [
-                'Create the array, then push.',
-                'Print the whole array.',
-                '✅ Solution: <code>const a=["a"]; a.push("b"); console.log(JSON.stringify(a));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Create the starting array.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Use arr.push("b") then print as JSON.',
+                  cost: 5,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr=["a"]; arr.push("b"); console.log(JSON.stringify(arr));',
+                  cost: 10,
+                },
               ],
             },
             {
               title: 'S3.4 Medium — Add Two',
               description:
-                `<p><strong>Task:</strong> Start with <code>[]</code>. Add <code>"x"</code> then <code>"y"</code>, then print.</p>`.trim(),
+                '<p><strong>Task:</strong> Start with <code>[]</code>. Add <code>"x"</code> then <code>"y"</code> to the end, then print the array.</p>',
               difficulty: 'medium',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.medium,
-              creditPoints: CREDIT_POINTS.medium,
+              rewardPoints: REWARD.medium,
+              creditPoints: CREDIT.medium,
               tests: [
                 { input: '', expect_print: '["x","y"]' },
                 { input: null, expect_print: '["x","y"]' },
-                { input: 'n/a', expect_print: '["x","y"]' },
-                { input: 42, expect_print: '["x","y"]' },
               ],
               hints: [
-                'Call push twice in order.',
-                'Print at the end.',
-                '✅ Solution: <code>const a=[]; a.push("x"); a.push("y"); console.log(JSON.stringify(a));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Use push twice in order.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the array as JSON to match expected.',
+                  cost: 7,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr=[]; arr.push("x"); arr.push("y"); console.log(JSON.stringify(arr));',
+                  cost: 12,
+                },
               ],
             },
             {
               title: 'S3.4 Hard — Pop Result',
               description:
-                `<p><strong>Task:</strong> Start with <code>["dog","cat","bird"]</code>. Remove the last item using <code>pop()</code>. Print the array that remains.</p>`.trim(),
+                '<p><strong>Task:</strong> Start with <code>["dog","cat","bird"]</code>. Remove the last item using <code>pop()</code>. Print the array that remains.</p>',
               difficulty: 'hard',
               moduleType: 'javascript',
-              rewardPoints: REWARD_POINTS.hard,
-              creditPoints: CREDIT_POINTS.hard,
+              rewardPoints: REWARD.hard,
+              creditPoints: CREDIT.hard,
               tests: [
                 { input: '', expect_print: '["dog","cat"]' },
                 { input: null, expect_print: '["dog","cat"]' },
-                { input: 0, expect_print: '["dog","cat"]' },
-                { input: 'ignored', expect_print: '["dog","cat"]' },
               ],
               hints: [
-                'Create the start array.',
-                'Call pop once.',
-                '✅ Solution: <code>const a=["dog","cat","bird"]; a.pop(); console.log(JSON.stringify(a));</code>',
+                {
+                  displayText: 'Hint 1',
+                  hintText: 'Call pop once to remove the last item.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Hint 2',
+                  hintText: 'Print the array as JSON to match exact output.',
+                  cost: 9,
+                },
+                {
+                  displayText: 'Solution',
+                  hintText:
+                    'const arr=["dog","cat","bird"]; arr.pop(); console.log(JSON.stringify(arr));',
+                  cost: 15,
+                },
               ],
             },
           ],
@@ -2378,10 +3375,11 @@ If it is empty, show nothing (empty line).</p>`.trim(),
       // INSERT CHAPTER 1
       await tx.insert(schema.chapters).values({
         title: chapter.title,
-        storyId: story?.id,
+        storyId: story!.id,
         description: chapter.description,
         rewardPoints: chapter.rewardPoints,
         creditPoints: chapter.creditPoints,
+        coverImage: chapter.coverImage,
         order: order,
       });
 
@@ -2417,7 +3415,7 @@ If it is empty, show nothing (empty line).</p>`.trim(),
             sectionID: createdSection?.id,
             order: challengeOrder,
             description: ch.description,
-            difficulty: ch.difficulty,
+            difficulty: ch.difficulty as any,
             expectedOutput: testsJson(ch.tests), // includes expect_print
             moduleType: ch.moduleType,
             rewardPoints: ch.rewardPoints,
@@ -2431,11 +3429,13 @@ If it is empty, show nothing (empty line).</p>`.trim(),
           });
 
           for (let i = 0; i < ch.hints.length; i++) {
+            const hint = ch.hints[i];
+            if (!hint) continue;
             await tx.insert(schema.challengeHints).values({
               challengeId: createdChallenge?.id,
-              displayText: `Hint ${i + 1}`,
-              hintText: ch.hints[i] || '',
-              cost: (i + 1) * 5,
+              displayText: hint.displayText,
+              hintText: hint.hintText,
+              cost: hint.cost,
             });
           }
         }
