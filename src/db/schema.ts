@@ -53,69 +53,41 @@ export const creditTransactions = mysqlTable('credit_transactions', {
 });
 
 export type AchievementRule =
-  // 1️⃣ Complete N challenges in a row
   | {
       type: 'streak';
-      /** How many consecutive challenges must be completed */
       length: number;
-      /** Optional flag for requiring zero wrong answers in the streak */
       withoutWrong?: boolean;
-      /** Optional — restricts this achievement to a specific chapter order (e.g., 1, 2, 3) */
       chapterOrder: number;
     }
-
-  // 2️⃣ Complete N challenges in a row with no hints used
   | {
       type: 'no_hints_streak';
-      /** Number of consecutive no-hint completions */
       length: number;
     }
-
-  // 3️⃣ Reach a total count of no-hint completions (not necessarily consecutive)
   | {
       type: 'no_hints_total';
-      /** How many total no-hint completions are needed */
       count: number;
     }
-
-  // 4️⃣ Solve a challenge within a time limit (chapter-specific)
   | {
       type: 'time_to_solve_under_seconds';
-      /** Threshold in seconds for fast completion */
       seconds: number;
-      /** Optional — restricts this achievement to a specific chapter order (e.g., 1, 2, 3) */
       chapterOrder?: number;
     }
-
-  // 5️⃣ Finish an entire chapter flawlessly (no hints in any challenge)
   | {
       type: 'chapter_perfect';
-      /** Exact chapter title, e.g. "Chapter 1 — Welcome to Codeville!" */
       chapterTitle: string;
     }
-
-  // 6️⃣ Maintain daily activity streak
   | {
       type: 'daily_active_streak';
-      /** Number of consecutive active days required */
       days: number;
     }
-
-  // 7️⃣ Share community solutions that are approved by moderators
   | {
       type: 'community_solution_shared';
-      /** Must be approved? */
       approved: boolean;
-      /** Number of approved submissions required */
       count: number;
     }
-
-  // 8️⃣ Complete multiple challenges while using at most X hints each
   | {
       type: 'limited_hints_per_challenge';
-      /** Maximum hints allowed per challenge */
       maxHints: number;
-      /** Number of challenges to satisfy the condition */
       count: number;
     };
 
