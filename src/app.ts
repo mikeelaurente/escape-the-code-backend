@@ -1,6 +1,7 @@
 import express from 'express';
 
-import storyRoutes from './modules/story/story.routes';
+import coursesRoutes from './modules/courses/courses.routes';
+import sectionsRoutes from './modules/sections/sections.routes';
 import userRoutes from './modules/users/users.routes';
 import codeRunnerRoutes from './modules/code-runner/codeRunner.routes';
 import authRoutes from './modules/auth/auth.routes';
@@ -25,7 +26,8 @@ app.use(express.static(path.join(__dirname, '../', 'public')));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', isAuthenticated, userRoutes);
-app.use('/api/story', isAuthenticated, storyRoutes);
+app.use('/api/courses', isAuthenticated, coursesRoutes);
+app.use('/api/sections', isAuthenticated, sectionsRoutes);
 app.use('/api/challenges', isAuthenticated, challengesRoutes);
 app.use('/api/runner', isAuthenticated, codeRunnerRoutes);
 app.use('/api/achievements', isAuthenticated, achievementsRoutes);

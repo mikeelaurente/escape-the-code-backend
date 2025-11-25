@@ -1,6 +1,6 @@
-import { relations, InferSelectModel } from 'drizzle-orm';
-import { index, tinyint, uniqueIndex } from 'drizzle-orm/mysql-core';
+import { relations } from 'drizzle-orm';
 import {
+  tinyint,
   datetime,
   timestamp,
   int,
@@ -9,6 +9,7 @@ import {
   json,
   text,
 } from 'drizzle-orm/mysql-core';
+
 import { createInsertSchema } from 'drizzle-zod';
 
 export const users = mysqlTable('users', {
@@ -91,6 +92,8 @@ export type AchievementRule =
       count: number;
     };
 
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
 export const achievements = mysqlTable('achievements', {
   id: int('id').autoincrement().primaryKey(),
   code: varchar('code', { length: 64 }).notNull(),
@@ -98,7 +101,7 @@ export const achievements = mysqlTable('achievements', {
   description: varchar('description', { length: 1024 }).notNull(),
   difficulty: varchar('difficulty', { length: 30 })
     .notNull()
-    .$type<'easy' | 'medium' | 'hard'>(),
+    .$type<Difficulty>(),
   rewardPoints: int('reward_points').notNull(),
   creditPoints: int('credit_points').notNull().default(0),
   icon: varchar('icon', { length: 64 }).notNull().default('tabler:award'),
@@ -114,17 +117,17 @@ export const userAchievements = mysqlTable('user_achievements', {
   awardedAt: datetime().notNull(),
 });
 
-export const storyProgress = mysqlTable('story_progress', {
+export const courseProgress = mysqlTable('course_progress', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
-  storyId: int('story_id').references(() => stories.id),
+  courseId: int('course_id').references(() => courses.id),
   chapterId: int('chapter_id').references(() => chapters.id),
   sectionId: int('section_id').references(() => sections.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export const stories = mysqlTable('stories', {
+export const courses = mysqlTable('courses', {
   id: int('id').autoincrement().primaryKey(),
   coverImage: varchar('cover_image', { length: 255 }),
   title: varchar({ length: 255 }).notNull().unique(),
@@ -135,9 +138,9 @@ export const stories = mysqlTable('stories', {
 
 export const chapters = mysqlTable('chapters', {
   id: int('id').autoincrement().primaryKey(),
-  storyId: int('story_id')
+  courseId: int('course_id')
     .notNull()
-    .references(() => stories.id),
+    .references(() => courses.id),
   title: varchar('title', { length: 255 }).notNull().unique(),
   description: varchar('description', { length: 2048 }).notNull(),
   order: int('order').notNull(),
@@ -174,7 +177,7 @@ export const challenges = mysqlTable('challenges', {
   order: int().default(0),
   moduleType: varchar({ length: 100 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
-  difficulty: varchar({ length: 50 }).notNull(),
+  difficulty: varchar({ length: 50 }).notNull().$type<Difficulty>(),
   durationLimitMinutes: int('duration_limit_minutes', {
     unsigned: true,
   }).default(0),
@@ -238,10 +241,10 @@ export const challengeHints = mysqlTable('challenge_hints', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export const userRelations = relations(users, ({ one, many }) => ({
+export const userRelations = relations(users, ({ many }) => ({
   creditUsage: many(hintUsages),
   achievements: many(userAchievements),
-  storyProgress: many(storyProgress),
+  courseProgress: many(courseProgress),
   challengeAnswers: many(challengeAnswers),
 }));
 
@@ -271,7 +274,7 @@ export const challengeAnswersRelations = relations(
 );
 export const challengeAnswerSubmissionsRelations = relations(
   challengeAnswerSubmissions,
-  ({ one, many }) => ({
+  ({ one }) => ({
     challenge: one(challenges, {
       fields: [challengeAnswerSubmissions.challengeId],
       references: [challenges.id],
@@ -283,18 +286,18 @@ export const challengeAnswerSubmissionsRelations = relations(
   }),
 );
 
-export const storyRelations = relations(stories, ({ many }) => ({
+export const courseRelations = relations(courses, ({ many }) => ({
   chapters: many(chapters),
-  progress: many(storyProgress),
+  progress: many(courseProgress),
 }));
 
 export const chapterRelations = relations(chapters, ({ many, one }) => ({
-  story: one(stories, {
-    fields: [chapters.storyId],
-    references: [stories.id],
+  course: one(courses, {
+    fields: [chapters.courseId],
+    references: [courses.id],
   }),
   sections: many(sections),
-  progress: many(storyProgress),
+  progress: many(courseProgress),
 }));
 
 export const sectionRelations = relations(sections, ({ one, many }) => ({
@@ -302,9 +305,9 @@ export const sectionRelations = relations(sections, ({ one, many }) => ({
     fields: [sections.chapterId],
     references: [chapters.id],
   }),
-  storyProgress: one(storyProgress, {
+  courseProgress: one(courseProgress, {
     fields: [sections.id],
-    references: [storyProgress.sectionId],
+    references: [courseProgress.sectionId],
   }),
   challenges: many(challenges),
 }));
@@ -318,7 +321,7 @@ export const challengeRelations = relations(challenges, ({ one, many }) => ({
   hints: many(challengeHints),
 }));
 
-export const hintsRelations = relations(challengeHints, ({ one, many }) => ({
+export const hintsRelations = relations(challengeHints, ({ one }) => ({
   challenge: one(challenges, {
     fields: [challengeHints.challengeId],
     references: [challenges.id],
@@ -326,7 +329,7 @@ export const hintsRelations = relations(challengeHints, ({ one, many }) => ({
   creditUsage: one(hintUsages),
 }));
 
-export const creditUsageRelations = relations(hintUsages, ({ one, many }) => ({
+export const creditUsageRelations = relations(hintUsages, ({ one }) => ({
   hint: one(challengeHints, {
     fields: [hintUsages.challengeHintId],
     references: [challengeHints.id],
@@ -334,24 +337,23 @@ export const creditUsageRelations = relations(hintUsages, ({ one, many }) => ({
   creditUsage: one(hintUsages),
 }));
 
-export const storyProgressRelations = relations(storyProgress, ({ one }) => ({
-  story: one(stories, {
-    fields: [storyProgress.storyId],
-    references: [stories.id],
+export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
+  course: one(courses, {
+    fields: [courseProgress.courseId],
+    references: [courses.id],
   }),
   chapter: one(chapters, {
-    fields: [storyProgress.chapterId],
+    fields: [courseProgress.chapterId],
     references: [chapters.id],
   }),
   section: one(sections, {
-    fields: [storyProgress.sectionId],
+    fields: [courseProgress.sectionId],
     references: [sections.id],
   }),
 }));
 
 export const insertUserSchema = createInsertSchema(users);
 export type Section = typeof sections.$inferSelect;
-export type User = typeof users.$inferSelect;
 
 export enum VerificationStatus {
   NotVerified = 0,

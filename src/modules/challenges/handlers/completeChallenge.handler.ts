@@ -73,7 +73,7 @@ export const completeChallengeHandler = async (
             with: {
               chapter: {
                 with: {
-                  story: true,
+                  course: true,
                 },
               },
             },
@@ -81,18 +81,18 @@ export const completeChallengeHandler = async (
         },
       });
       // check if already inserted to story progress
-      const inserted = await tx.query.storyProgress.findFirst({
+      const inserted = await tx.query.courseProgress.findFirst({
         where: and(
-          eq(schema.storyProgress.userId, userId),
+          eq(schema.courseProgress.userId, userId),
           eq(
-            schema.storyProgress.sectionId,
+            schema.courseProgress.sectionId,
             Number(challengeWithDetails?.sectionID),
           ),
         ),
       });
       if (!inserted) {
-        await tx.insert(schema.storyProgress).values({
-          storyId: challengeWithDetails?.section?.chapter?.storyId,
+        await tx.insert(schema.courseProgress).values({
+          courseId: challengeWithDetails?.section?.chapter?.courseId,
           chapterId: challengeWithDetails?.section?.chapterId,
           sectionId: challengeWithDetails?.sectionID,
           userId,
@@ -142,18 +142,6 @@ Respond in HTML only (wrapped in div, no markdown syntax):
           <h2>Code Improvements</h2>
           <div>{ CODE_IMPROVEMENTS_HERE }</div>
     </div>
-    <div>
-          <h2>Best Practices</h2>
-          <div>{ BEST_PRACTICES_HERE }</div>
-    </div>
-    <div>
-          <h2>Additional Resources</h2>
-          <div>{ ADDITIONAL_RESOURCES_HERE }</div>
-    </div>
-    <div>
-          <h2>Trivias</h2>
-          <div>{ TRIVIAS_HERE }</div>
-    </div>
 </div>
 Important Rules:
 - make sure to use the given task as context when giving a feedback or code review.
@@ -161,7 +149,6 @@ Important Rules:
 - to display the output, console.log will be used.
 - for code review - check if the user has followed the given task. Also, validate if some tricks were used to bypass the correct procedure.
 - for code improvements - if the user did not follow the given task, provide an explanation on how it could be done.
-- for additional resources - make sure to pull resources from reputable sites.
 - use <br/> for line breaks
 - wrap code in <pre> tag
         `);

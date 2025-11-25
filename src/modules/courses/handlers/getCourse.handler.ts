@@ -5,17 +5,20 @@ import { asc, eq } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { getUserRanking } from '../../../db/repositories/user.repository';
 
-export const getStoryHandler = async (
+export const getCourseHandler = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const userId = Number(req.user?.id);
-    const story = await db.query.stories.findFirst({
+    const courseId = Number(req.params.id) || 0;
+    console.log('*******************************************');
+    const story = await db.query.courses.findFirst({
+      where: eq(schema.courses.id, courseId),
       with: {
         progress: {
-          where: eq(schema.storyProgress.userId, userId),
+          where: eq(schema.courseProgress.userId, userId),
         },
         chapters: {
           with: {
@@ -56,7 +59,7 @@ export const getStoryHandler = async (
       chapters: story.chapters.map((c) => ({
         id: c.id,
         order: c.order,
-        storyId: c.storyId,
+        courseId: c.courseId,
         title: c.title,
         sections: c.sections,
         completed: c.id < assignedSection.chapterId,

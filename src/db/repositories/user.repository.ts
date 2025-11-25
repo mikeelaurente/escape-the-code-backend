@@ -76,7 +76,7 @@ export const getUserRanking = async (): Promise<UserRanking[]> => {
             u.lastName,
             u.photoUrl,
             SUM(rewardPoints) AS points,
-            (SELECT COUNT(*) FROM story_progress sp WHERE sp.user_id = u.id) completed,
+            (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total
             FROM challenge_answers ca
             JOIN users u ON u.id = ca.user_id
@@ -127,7 +127,7 @@ export const getUserRankingFor = async (userId: number) => {
             u.bannerUrl,
             r.\`rank\`,
             r.points,
-            (SELECT COUNT(*) FROM story_progress sp WHERE sp.user_id = u.id) completed,
+            (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total,
             (SELECT MIN(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration 
               FROM challenge_answers WHERE STATUS = 1 AND user_id = ${userId}
@@ -171,7 +171,7 @@ export const getUserDashboard = async (userId: number) => {
             u.photoUrl,
             u.bannerUrl,
             SUM(rewardPoints) AS points,
-            (SELECT COUNT(*) FROM story_progress sp WHERE sp.user_id = u.id) completed,
+            (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total
             FROM users u
             LEFT JOIN challenge_answers ca ON u.id = ca.user_id

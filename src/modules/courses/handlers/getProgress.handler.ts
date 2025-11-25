@@ -12,9 +12,9 @@ export const getProgressHandler = async (
 ) => {
   const userId = Number(req.user?.id);
 
-  const progress = await db.query.storyProgress.findMany({
-    where: eq(schema.storyProgress.userId, userId),
-    orderBy: desc(schema.storyProgress.createdAt),
+  const progress = await db.query.courseProgress.findMany({
+    where: eq(schema.courseProgress.userId, userId),
+    orderBy: desc(schema.courseProgress.createdAt),
     columns: {
       id: true,
       createdAt: true,

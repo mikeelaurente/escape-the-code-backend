@@ -7,6 +7,7 @@ export const getUserRanksHandler = async (
   next: NextFunction,
 ) => {
   try {
+    console.log('###################################');
     const ranking = await getUserRanking();
 
     res.json({

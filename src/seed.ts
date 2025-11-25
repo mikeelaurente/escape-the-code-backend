@@ -605,7 +605,7 @@ async function main() {
         'Join Zia and Pax as they explore the Sparkling City of JS. Learn JavaScript basics by solving tiny puzzles to light bridges, open doors, and help friendly bots. No OOP—just the building blocks!',
     });
 
-    const story = await tx.query.stories.findFirst({
+    const story = await tx.query.courses.findFirst({
       where: eq(schema.stories.title, 'Code Quest: The Sparkling City of JS'),
     });
 

@@ -4,7 +4,6 @@ import * as schema from '../../../db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
-import { title } from 'process';
 
 export const getSectionHandler = async (
   req: Request,
@@ -23,6 +22,7 @@ export const getSectionHandler = async (
         columns: {
           id: true,
           title: true,
+          courseId: true,
         },
       },
       challenges: {
@@ -63,7 +63,7 @@ export const getSectionHandler = async (
           },
         },
       },
-      storyProgress: true,
+      courseProgress: true,
     },
   });
 

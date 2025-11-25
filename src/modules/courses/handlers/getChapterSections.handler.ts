@@ -13,11 +13,11 @@ export const getChapterSectionsHandler = async (
   try {
     const userId = Number(req.user?.id);
     const chapterId = Number(req.params.chapter);
-    const story = await db.query.stories.findFirst({});
-    const progress = await db.query.storyProgress.findMany({
+    const course = await db.query.courses.findFirst({});
+    const progress = await db.query.courseProgress.findMany({
       where: and(
-        eq(schema.storyProgress.userId, userId),
-        eq(schema.storyProgress.storyId, Number(story?.id)),
+        eq(schema.courseProgress.userId, userId),
+        eq(schema.courseProgress.courseId, Number(course?.id)),
       ),
       with: {
         section: true,
