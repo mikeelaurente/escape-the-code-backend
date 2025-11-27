@@ -3,7 +3,7 @@ import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
-import { generateFeedback } from '../../../feedback';
+import { generateFeedback, generateOllamaFeedback } from '../../../feedback';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -18,6 +18,17 @@ export const completeChallengeHandler = async (
     dayjs.extend(utc);
     const challengeId = parseInt(req.params.id || '');
     const userId = Number(req.user?.id);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+
+    // Function to send data
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`${event}: ${JSON.stringify(data)}\n\n`);
+    };
 
     const response = await db.transaction(async (tx) => {
       const challenge = await tx.query.challenges.findFirst({
@@ -64,8 +75,9 @@ export const completeChallengeHandler = async (
       }
 
       let nextSection = null;
-      let feedback = null;
+      let feedback = '';
 
+      sendEvent('message', { message: 'Checking challenge.' });
       const challengeWithDetails = await tx.query.challenges.findFirst({
         where: eq(schema.challenges.id, challengeId),
         with: {
@@ -80,6 +92,8 @@ export const completeChallengeHandler = async (
           },
         },
       });
+
+      sendEvent('message', { message: 'Updating progress.' });
       // check if already inserted to story progress
       const inserted = await tx.query.courseProgress.findFirst({
         where: and(
@@ -109,6 +123,7 @@ export const completeChallengeHandler = async (
         })
         .where(eq(schema.challengeAnswers.id, activeAnswer.id));
 
+      sendEvent('message', { message: 'Checking rewards.' });
       await tx.insert(schema.creditTransactions).values({
         amount: Number(challenge.creditPoints),
         title: 'Reward: ' + challenge.title,
@@ -121,7 +136,10 @@ export const completeChallengeHandler = async (
       await updateUserBalance(userId, tx);
 
       try {
-        feedback = await generateFeedback(`
+        sendEvent('message', { message: 'Generating feedback.' });
+        const response = await generateOllamaFeedback(`
+COURSE CHAPTER: ${challengeWithDetails?.section?.chapter.title}
+CHAPTER SECTION: ${challengeWithDetails?.section?.title}
 CHALLENGE GIVEN: """
 ${challenge.description}
 """
@@ -142,16 +160,39 @@ Respond in HTML only (wrapped in div, no markdown syntax):
           <h2>Code Improvements</h2>
           <div>{ CODE_IMPROVEMENTS_HERE }</div>
     </div>
+    <hr />
+    <h2>Rating: { RATING }/{ MAX_RATING}</h2>
 </div>
 Important Rules:
-- make sure to use the given task as context when giving a feedback or code review.
-- the input data is a variable named 'input'.
-- to display the output, console.log will be used.
-- for code review - check if the user has followed the given task. Also, validate if some tricks were used to bypass the correct procedure.
-- for code improvements - if the user did not follow the given task, provide an explanation on how it could be done.
-- use <br/> for line breaks
-- wrap code in <pre> tag
+- The user is a beginner.
+- Make sure to use the given task as context when giving a feedback or code review.
+- The input data is a variable named 'input'. This variable will be automatically injected in the code. Task may contain placeholder(s) pointing to the input data and can be named differently.
+- To display the output, console.log will be used.
+- Use <br/> for line breaks
+- Wrap code in <pre> tag
+- CODE REVIEW RULES:
+  > Assume that the user's code is correct unless it didn't follow the task instructions and bypass the rules.
+  > Validate if some tricks were used to bypass the correct procedure
+  > Adding validation, sanitation, or error handling is not considered as a trick.
+  > A trick is defined as doing shortcuts like printing the literal output.
+  > Don't print the serialed output, just give the review.
+  > Don't require input validation, sanitization or error handling unless specified in the task.
+- CODE IMPROVEMENT RULES:
+  > Provide an explanation on how the code can be improved.
+  > Don't use any advance solutions, make it beginner friendly.
+- RATING RULES:
+  > Add the overall rating (1-10), 10 is the highest.
+  > If the desired output has been produced without using any tricks, give it a perfect rating to motivate the user.
         `);
+
+        if (response) {
+          for await (const part of response) {
+            feedback += part.message.content.toString();
+            sendEvent('feedback', { data: part.message.content });
+          }
+        } else {
+          feedback = 'No feedback';
+        }
       } catch (e) {
         console.log(e);
         feedback = 'No feedback.';
@@ -223,9 +264,11 @@ Important Rules:
       }
     }
 
-    return res.json({
-      ...response,
-      achievements: achievements,
+    sendEvent('end', {
+      data: {
+        ...response,
+        achievements: achievements,
+      },
     });
   } catch (e) {
     console.log('error', e);

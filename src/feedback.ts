@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import path from 'path';
+import ollama, { AbortableAsyncIterator, ChatResponse } from 'ollama';
 
 export function generateFeedback(args: string): Promise<string> {
   const query = Buffer.from(args).toString('base64');
@@ -42,4 +43,20 @@ export function generateFeedback(args: string): Promise<string> {
       reject(new Error(`Failed to start Python process: ${err.message}`));
     });
   });
+}
+
+export async function generateOllamaFeedback(
+  query: string,
+): Promise<AbortableAsyncIterator<ChatResponse> | undefined> {
+  try {
+    const message = {
+      role: 'user',
+      content: `You are to give feedback about the provided source code. The source code is written in Javascript. Remember you are talking to a complete beginner.\n\nQuery: ${query}`,
+    };
+    return await ollama.chat({
+      model: 'llama3.2',
+      messages: [message],
+      stream: true,
+    });
+  } catch (e) {}
 }

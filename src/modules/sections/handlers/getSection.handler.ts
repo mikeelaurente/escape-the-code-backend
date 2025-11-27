@@ -72,7 +72,10 @@ export const getSectionHandler = async (
     return;
   }
 
-  if (!isFirstSectionGreaterThanOrSame(assignedSection, selectedSection)) {
+  if (
+    assignedSection.id &&
+    !isFirstSectionGreaterThanOrSame(assignedSection, selectedSection)
+  ) {
     return res.json({
       status: 'error',
       message: selectedSection?.title + ' is locked',

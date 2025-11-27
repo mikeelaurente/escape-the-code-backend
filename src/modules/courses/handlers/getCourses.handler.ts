@@ -59,16 +59,7 @@ export const getCoursesHandler = async (
         progress: {
           where: eq(schema.courseProgress.userId, userId),
         },
-        chapters: {
-          with: {
-            sections: {
-              columns: {
-                id: true,
-              },
-            },
-          },
-          orderBy: asc(schema.chapters.order),
-        },
+        chapters: true,
       },
       where: and(...sql),
       orderBy: order,
@@ -78,12 +69,10 @@ export const getCoursesHandler = async (
 
     courses.forEach((course) =>
       course.chapters.forEach((chapter) => {
-        chapter.sections.forEach((section) => {
-          (section as any).storyProgress = course.progress
-            .filter((p) => p.sectionId == section.id)
-            .map((sp) => ({ id: sp.id, createdAt: sp.createdAt }))
-            .shift();
-        });
+        (chapter as any).courseProgress = course.progress
+          .filter((p) => p.chapterId == chapter.id)
+          .map((sp) => ({ id: sp.id, createdAt: sp.createdAt }))
+          .shift();
       }),
     );
 
@@ -95,13 +84,9 @@ export const getCoursesHandler = async (
       description: course.description,
       progress: course.progress,
       chapters: course.chapters.map((c) => ({
-        id: c.id,
-        order: c.order,
-        courseId: c.courseId,
-        title: c.title,
-        sections: c.sections,
-        completed: c.id < assignedSection.chapterId,
-        locked: c.id > assignedSection.chapterId,
+        ...c,
+        completed: assignedSection.id ? c.id < assignedSection.chapterId : true,
+        locked: assignedSection.id ? c.id > assignedSection.chapterId : false,
       })),
     }));
 

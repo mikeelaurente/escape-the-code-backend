@@ -94,8 +94,8 @@ export const getSectionsHandler = async (
       return {
         id: modifiedSection.id,
         title: modifiedSection.title,
-        locked: modifiedSection.locked,
-        completed: modifiedSection.completed,
+        locked: assignedSection.id ? modifiedSection.locked : false,
+        completed: assignedSection.id ? modifiedSection.completed : true,
         description: modifiedSection.description,
         chapterId: s.chapterId,
       };

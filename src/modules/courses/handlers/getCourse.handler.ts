@@ -42,7 +42,7 @@ export const getCourseHandler = async (
 
     story.chapters.forEach((chapter) => {
       chapter.sections.forEach((section) => {
-        (section as any).storyProgress = story.progress
+        (section as any).courseProgress = story.progress
           .filter((p) => p.sectionId == section.id)
           .map((sp) => ({ id: sp.id, createdAt: sp.createdAt }))
           .shift();
@@ -50,6 +50,7 @@ export const getCourseHandler = async (
     });
 
     const assignedSection = await getNextSectionFor(userId);
+    console.log('assignedSection', assignedSection);
 
     const response = {
       id: story.id,
@@ -62,8 +63,12 @@ export const getCourseHandler = async (
         courseId: c.courseId,
         title: c.title,
         sections: c.sections,
-        completed: c.id < assignedSection.chapterId,
-        locked: c.id > assignedSection.chapterId,
+        completed: assignedSection.chapterId
+          ? c.id < assignedSection.chapterId
+          : true,
+        locked: assignedSection.chapterId
+          ? c.id > assignedSection.chapterId
+          : false,
       })),
     };
 

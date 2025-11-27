@@ -15,14 +15,13 @@ async function main() {
     await tx.delete(schema.userAchievements);
     await tx.delete(schema.achievements);
     await tx.delete(schema.challengeHints);
-    await tx.delete(schema.storyProgress);
+    await tx.delete(schema.courseProgress);
     await tx.delete(schema.challengeAnswerSubmissions);
     await tx.delete(schema.challengeAnswers);
-    await tx.delete(schema.storyProgress);
     await tx.delete(schema.challenges);
     await tx.delete(schema.sections);
     await tx.delete(schema.chapters);
-    await tx.delete(schema.stories);
+    await tx.delete(schema.courses);
     await tx.delete(schema.users);
     await tx.delete(schema.achievements);
 
