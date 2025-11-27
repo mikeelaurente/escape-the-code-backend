@@ -197,7 +197,10 @@ export const getUserDashboard = async (userId: number) => {
   return userRank.shift();
 };
 
-export const getSectionAnswersWithHints = async (userId: number) => {
+export const getSectionAnswersWithHints = async (
+  userId: number,
+  courseId: number,
+) => {
   const query = sql`
           WITH hint_records AS (
             WITH used_hints AS (
@@ -216,19 +219,24 @@ export const getSectionAnswersWithHints = async (userId: number) => {
             ),
             submissions AS (
               SELECT 
-              answer_id, 
+              cas.answer_id, 
               JSON_ARRAYAGG(
                   JSON_OBJECT(
-                    'id', id,
-                    'code', \`code\`,
-                    'result', result,
-                    'metadata', metadata,
-                    'codeOutput', codeOutput,
-                    'created_at', created_at
+                    'id', cas.id,
+                    'code', cas.\`code\`,
+                    'result', cas.result,
+                    'metadata', cas.metadata,
+                    'codeOutput', cas.codeOutput,
+                    'created_at', cas.created_at
                   )
                 ) AS submissions
-              FROM challenge_answer_submissions
-              WHERE user_id = ${userId}
+              FROM challenge_answer_submissions cas
+              JOIN challenge_answers ca ON ca.id = cas.answer_id
+                AND cas.user_id = ${userId}
+              JOIN challenges c ON c.id = ca.challenge_id
+              JOIN sections s ON s.id = c.section_id
+              JOIN chapters ch ON ch.id = s.chapter_id
+                AND ch.course_id = ${courseId}
               GROUP BY answer_id
             )
             SELECT 
@@ -250,6 +258,9 @@ export const getSectionAnswersWithHints = async (userId: number) => {
             FROM challenges c
             JOIN sections s 
               ON s.id = c.section_id
+            JOIN chapters ch
+              ON ch.id = s.chapter_id
+              AND ch.course_id = ${courseId}
             JOIN challenge_answers ca 
               ON c.id = ca.challenge_id 
                 AND ca.\`status\` = 1 
@@ -260,16 +271,21 @@ export const getSectionAnswersWithHints = async (userId: number) => {
           ),
           section_challenges AS (
             SELECT
-              section_id,
+              c.section_id,
               JSON_ARRAYAGG(
                   JSON_OBJECT(
-                    'id', id,
-                    'title', title,
-                    'difficulty', difficulty
+                    'id', c.id,
+                    'title', c.title,
+                    'difficulty', c.difficulty
                   )
                 ) AS sect_challenges
-            FROM challenges
-            GROUP BY section_id
+            FROM challenges c
+            JOIN sections s 
+              ON s.id = c.section_id
+            JOIN chapters ch
+              ON ch.id = s.chapter_id
+              AND ch.course_id = ${courseId}
+            GROUP BY c.section_id
           )
           SELECT 
             s.chapter_id AS chapterId, 
@@ -282,6 +298,7 @@ export const getSectionAnswersWithHints = async (userId: number) => {
             sc.sect_challenges as challenges
           FROM sections s
           JOIN chapters c ON c.id = s.chapter_id
+            AND c.course_id = ${courseId}
           JOIN section_challenges sc ON s.id = sc.section_id
           LEFT JOIN hint_records uh 
             ON s.chapter_id = uh.chapter_id 

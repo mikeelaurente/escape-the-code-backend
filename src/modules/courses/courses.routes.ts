@@ -4,6 +4,7 @@ import * as handlers from './handlers';
 const router = Router();
 
 router.get('/', handlers.getCoursesHandler);
+router.get('/:course/progress', handlers.getCourseProgressHandler);
 router.get('/chapters/:chapter/sections', handlers.getChapterSectionsHandler);
 router.get('/next-section', handlers.getNextSectionHandler);
 router.get('/progress', handlers.getProgressHandler);
