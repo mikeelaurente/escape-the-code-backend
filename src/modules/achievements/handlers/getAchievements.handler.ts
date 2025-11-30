@@ -20,6 +20,7 @@ import { getUserRanking } from '../../../db/repositories/user.repository';
 import QueryString from 'qs';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { AchievementsQueryParamsSchema } from '../../../types/achievement';
+import { resolveImage } from '../../../helpers/image.helper';
 
 export const getAchievementsHandler = async (
   req: Request,
@@ -79,7 +80,7 @@ export const getAchievementsHandler = async (
       },
       where: and(...sqlQuery),
       orderBy: sql`
-        CASE 
+        CASE
           WHEN difficulty = 'easy' THEN 1
           WHEN difficulty = 'medium' THEN 2
           WHEN difficulty = 'hard' THEN 3
@@ -90,9 +91,15 @@ export const getAchievementsHandler = async (
       offset: offset,
     });
 
+    const data = achievements.map((a, idx) => ({
+      ...a,
+      // coverImage: a.coverImage ? resolveImage('user.png', 'avatar') : null,
+      coverImage: idx % 2 === 0 ? resolveImage('user.png', 'avatar') : null,
+    }))
+
     res.json({
       status: 'ok',
-      data: achievements,
+      data: data,
       meta: {
         total,
         limit: result.data.limit,

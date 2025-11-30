@@ -13,7 +13,6 @@ export const getCourseHandler = async (
   try {
     const userId = Number(req.user?.id);
     const courseId = Number(req.params.id) || 0;
-    console.log('*******************************************');
     const story = await db.query.courses.findFirst({
       where: eq(schema.courses.id, courseId),
       with: {
@@ -63,6 +62,7 @@ export const getCourseHandler = async (
         courseId: c.courseId,
         title: c.title,
         sections: c.sections,
+        tags: c.tags ? c.tags?.split(',') : [],
         completed: assignedSection.chapterId
           ? c.id < assignedSection.chapterId
           : true,

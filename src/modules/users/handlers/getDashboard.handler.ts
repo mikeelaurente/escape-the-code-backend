@@ -27,17 +27,12 @@ export const getDashboardHandler = async (
     const courses = await db.query.courses.findMany({
       where: inArray(schema.courses.id, coursesIds),
     });
-    const transactions = await db.query.creditTransactions.findMany({
-      where: and(eq(schema.creditTransactions.userId, userId)),
-      orderBy: desc(schema.creditTransactions.createdAt),
-    });
 
     return res.json({
       status: 'ok',
       data: {
         courses,
         ranking: ranking,
-        transactions: transactions,
       },
     });
   } catch (e) {

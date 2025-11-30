@@ -1,14 +1,12 @@
 import { relations } from 'drizzle-orm';
-import {
-  tinyint,
+import { tinyint,
   datetime,
   timestamp,
   int,
   mysqlTable,
   varchar,
   json,
-  text,
-} from 'drizzle-orm/mysql-core';
+  text } from 'drizzle-orm/mysql-core';
 
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -53,44 +51,44 @@ export const creditTransactions = mysqlTable('credit_transactions', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export type AchievementRule =
+export type AchievementRule
+  = | {
+    type: 'streak';
+    length: number;
+    withoutWrong?: boolean;
+    chapterOrder: number;
+  }
   | {
-      type: 'streak';
-      length: number;
-      withoutWrong?: boolean;
-      chapterOrder: number;
-    }
+    type: 'no_hints_streak';
+    length: number;
+  }
   | {
-      type: 'no_hints_streak';
-      length: number;
-    }
+    type: 'no_hints_total';
+    count: number;
+  }
   | {
-      type: 'no_hints_total';
-      count: number;
-    }
+    type: 'time_to_solve_under_seconds';
+    seconds: number;
+    chapterOrder?: number;
+  }
   | {
-      type: 'time_to_solve_under_seconds';
-      seconds: number;
-      chapterOrder?: number;
-    }
+    type: 'chapter_perfect';
+    chapterTitle: string;
+  }
   | {
-      type: 'chapter_perfect';
-      chapterTitle: string;
-    }
+    type: 'daily_active_streak';
+    days: number;
+  }
   | {
-      type: 'daily_active_streak';
-      days: number;
-    }
+    type: 'community_solution_shared';
+    approved: boolean;
+    count: number;
+  }
   | {
-      type: 'community_solution_shared';
-      approved: boolean;
-      count: number;
-    }
-  | {
-      type: 'limited_hints_per_challenge';
-      maxHints: number;
-      count: number;
-    };
+    type: 'limited_hints_per_challenge';
+    maxHints: number;
+    count: number;
+  };
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -104,6 +102,7 @@ export const achievements = mysqlTable('achievements', {
     .$type<Difficulty>(),
   rewardPoints: int('reward_points').notNull(),
   creditPoints: int('credit_points').notNull().default(0),
+  coverImage: varchar('cover_image', { length: 255 }),
   icon: varchar('icon', { length: 64 }).notNull().default('tabler:award'),
   rule: json('rule').$type<AchievementRule>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -138,15 +137,14 @@ export const courses = mysqlTable('courses', {
 
 export const chapters = mysqlTable('chapters', {
   id: int('id').autoincrement().primaryKey(),
-  courseId: int('course_id')
-    .notNull()
-    .references(() => courses.id),
+  courseId: int('course_id').notNull().references(() => courses.id),
   title: varchar('title', { length: 255 }).notNull().unique(),
   description: varchar('description', { length: 2048 }).notNull(),
   order: int('order').notNull(),
   coverImage: varchar('cover_image', { length: 512 }),
   rewardPoints: int('reward_points').notNull().default(0),
   creditPoints: int('credit_points').notNull().default(0),
+  tags: text('tags').$type<string>().default(''),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });

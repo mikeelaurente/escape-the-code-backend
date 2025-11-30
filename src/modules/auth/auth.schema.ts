@@ -1,18 +1,31 @@
 import z from 'zod';
 
-export const registerUserSchema = z.object({
-  firstName: z.string().nonempty('Firstname is required'),
-  lastName: z
-    .string({
-      error: 'Lastname is required',
-    })
-    .nonempty('Lastname is required'),
-  email: z.email().nonempty('Email is required'),
-  password: z
-    .string()
-    .min(6)
-    .nonempty('Password must be at least 6 characters long'),
-});
+export const registerUserSchema = z
+  .object({
+    firstName: z.string().nonempty('Firstname is required'),
+    lastName: z
+      .string({
+        error: 'Lastname is required',
+      })
+      .nonempty('Lastname is required'),
+    email: z.email().nonempty('Email is required'),
+    password: z
+      .string()
+      .min(6)
+      .nonempty('Password must be at least 6 characters long'),
+    confirmPassword: z
+      .string()
+      .min(1, { message: 'Please confirm your password' }),
+  })
+  .superRefine((val, ctx) => {
+    if (val.password !== val.confirmPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Password is not the same as confirm password',
+        path: ['confirmPassword'],
+      });
+    }
+  });
 
 export const loginSchema = z.object({
   email: z.email().nonempty('Email is required'),

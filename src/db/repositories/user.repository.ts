@@ -1,8 +1,12 @@
 import { sql, eq, sum, and } from 'drizzle-orm';
 import { db, EscapeTheCodeTransaction } from '../../db';
+import z from 'zod';
 import * as schema from '../../db/schema';
 import config from '../../config/config';
 import { resolveAvatar, resolveBanner } from '../../helpers/image.helper';
+import { Paginated } from '../../types';
+import { createQueryParamsSchema } from '../../types/schema';
+import { count } from 'drizzle-orm';
 
 type UserRanking = {
   id: number;
@@ -15,6 +19,9 @@ type UserRanking = {
   bannerUrl: string;
   total: number;
 };
+
+export const RankingRequestSchema = createQueryParamsSchema(z.object());
+export type RankingRequest = z.infer<typeof RankingRequestSchema>;
 
 async function getUserTotalTransactionsBy(
   userId: number,
@@ -63,13 +70,29 @@ export async function updateUserBalance(
     .where(eq(schema.users.id, uid));
 }
 
-export const getUserRanking = async (): Promise<UserRanking[]> => {
+export const getUserRanking = async (options: RankingRequest): Promise<Paginated<UserRanking>> => {
+
+  let search = options.search ?? '';
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 10;
+  const offset = (page - 1) * limit;
+
+  let searchSql = sql`WHERE 1 = 1`;
+  if (search.length > 0) {
+    searchSql = sql`WHERE
+        email LIKE CONCAT('%', ${search}, '%')
+        OR firstName LIKE CONCAT('%', ${search}, '%')
+        OR lastName LIKE CONCAT('%', ${search}, '%')
+    `;
+  }
+
   const query = sql`
-          SELECT 
-          @rownum := @rownum + 1 AS \`rank\`, 
-          x.* 
+      SELECT * FROM (
+          SELECT
+          @rownum := @rownum + 1 AS \`rank\`,
+          x.*
         FROM (
-          SELECT 
+          SELECT
             u.id,
             u.email,
             u.firstName,
@@ -86,27 +109,45 @@ export const getUserRanking = async (): Promise<UserRanking[]> => {
         ) x,
         (SELECT @rownum := 0) r
         ORDER BY points DESC, x.completed DESC
+      ) y
+      ${searchSql}
     `;
-  const [result, _] = await db.execute<UserRanking>(query);
-  const ranking = result as any as UserRanking[];
-  const port = config.port;
-  return [
-    ...ranking.map((rank, idx) => ({
+
+  console.log(query.getSQL().queryChunks);
+  const [total] = await db.execute<{ cnt: number }>(sql`
+    SELECT COUNT(*) as cnt
+    FROM (${query}) t
+    `);
+  const [result] = await db.execute<UserRanking>(sql`
+    ${query}
+    LIMIT ${limit}
+    OFFSET ${offset}
+  `);
+  const rankings = result as any as UserRanking[];
+  const data =  [
+    ...rankings.map((rank, idx) => ({
       ...rank,
       points: Number(rank.points),
       photoUrl: resolveAvatar(rank.photoUrl),
     })),
   ];
+
+  return {
+    data: data,
+    limit: limit,
+    page: page,
+    total: (total as any as { cnt: number}[])[0]?.cnt ?? 0
+  }
 };
 
 export const getUserRankingFor = async (userId: number) => {
   const query = sql`
         WITH ranking AS (
-            SELECT 
-              @rownum := @rownum + 1 AS \`rank\`, 
-              x.* 
+            SELECT
+              @rownum := @rownum + 1 AS \`rank\`,
+              x.*
             FROM (
-              SELECT 
+              SELECT
                   u.id,
                   SUM(rewardPoints) AS points
                   FROM challenge_answers ca
@@ -117,7 +158,7 @@ export const getUserRankingFor = async (userId: number) => {
             ) x,
             (SELECT @rownum := 0) r
         )
-        SELECT 
+        SELECT
             u.id,
             u.email,
             u.firstName,
@@ -129,11 +170,11 @@ export const getUserRankingFor = async (userId: number) => {
             r.points,
             (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total,
-            (SELECT MIN(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration 
+            (SELECT MIN(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration
               FROM challenge_answers WHERE STATUS = 1 AND user_id = ${userId}
               GROUP BY user_id
             ) shortestTime,
-            (SELECT MAX(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration 
+            (SELECT MAX(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration
               FROM challenge_answers WHERE STATUS = 1 AND user_id = ${userId}
               GROUP BY user_id
             ) longestTime
@@ -162,7 +203,7 @@ export const getUserRankingFor = async (userId: number) => {
 
 export const getUserDashboard = async (userId: number) => {
   const query = sql`
-        SELECT 
+        SELECT
             u.id,
             u.email,
             u.firstName,
@@ -204,8 +245,8 @@ export const getSectionAnswersWithHints = async (
   const query = sql`
           WITH hint_records AS (
             WITH used_hints AS (
-              SELECT 
-              challenge_id, 
+              SELECT
+              challenge_id,
               JSON_ARRAYAGG(
                   JSON_OBJECT(
                     'id', id,
@@ -218,8 +259,8 @@ export const getSectionAnswersWithHints = async (
               GROUP BY challenge_id
             ),
             submissions AS (
-              SELECT 
-              cas.answer_id, 
+              SELECT
+              cas.answer_id,
               JSON_ARRAYAGG(
                   JSON_OBJECT(
                     'id', cas.id,
@@ -239,7 +280,7 @@ export const getSectionAnswersWithHints = async (
                 AND ch.course_id = ${courseId}
               GROUP BY answer_id
             )
-            SELECT 
+            SELECT
               s.chapter_id,
               s.id AS section_id,
               JSON_ARRAYAGG(
@@ -256,14 +297,14 @@ export const getSectionAnswersWithHints = async (
                   )
                 ) AS answers
             FROM challenges c
-            JOIN sections s 
+            JOIN sections s
               ON s.id = c.section_id
             JOIN chapters ch
               ON ch.id = s.chapter_id
               AND ch.course_id = ${courseId}
-            JOIN challenge_answers ca 
-              ON c.id = ca.challenge_id 
-                AND ca.\`status\` = 1 
+            JOIN challenge_answers ca
+              ON c.id = ca.challenge_id
+                AND ca.\`status\` = 1
                 AND ca.user_id = ${userId}
             LEFT JOIN used_hints uh ON ca.challenge_id = uh.challenge_id
             LEFT JOIN submissions sub ON sub.answer_id = ca.id
@@ -280,28 +321,28 @@ export const getSectionAnswersWithHints = async (
                   )
                 ) AS sect_challenges
             FROM challenges c
-            JOIN sections s 
+            JOIN sections s
               ON s.id = c.section_id
             JOIN chapters ch
               ON ch.id = s.chapter_id
               AND ch.course_id = ${courseId}
             GROUP BY c.section_id
           )
-          SELECT 
-            s.chapter_id AS chapterId, 
-            c.\`order\` AS chapterOrder, 
-            c.title as chapterTitle, 
-            s.id AS sectionId, 
-            s.\`order\` AS sectionOrder, 
-            s.title as sectionTitle, 
+          SELECT
+            s.chapter_id AS chapterId,
+            c.\`order\` AS chapterOrder,
+            c.title as chapterTitle,
+            s.id AS sectionId,
+            s.\`order\` AS sectionOrder,
+            s.title as sectionTitle,
             uh.answers,
             sc.sect_challenges as challenges
           FROM sections s
           JOIN chapters c ON c.id = s.chapter_id
             AND c.course_id = ${courseId}
           JOIN section_challenges sc ON s.id = sc.section_id
-          LEFT JOIN hint_records uh 
-            ON s.chapter_id = uh.chapter_id 
+          LEFT JOIN hint_records uh
+            ON s.chapter_id = uh.chapter_id
               AND s.id = uh.section_id
           ORDER BY c.\`order\`, s.\`order\` ASC;
     `;

@@ -51,7 +51,8 @@ export const loginHandler = async (
 
     if (!(await bcrypt.compare(password, user.hashedPassword!))) {
       return res.json({
-        status: 'invalid',
+        status: 'error',
+        code: 'invalid_credentials',
         error: 'Invalid credentials',
       });
     }

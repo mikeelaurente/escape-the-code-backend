@@ -7,6 +7,7 @@ import codeRunnerRoutes from './modules/code-runner/codeRunner.routes';
 import authRoutes from './modules/auth/auth.routes';
 import challengesRoutes from './modules/challenges/challenges.routes';
 import achievementsRoutes from './modules/achievements/achievements.routes';
+import transactionsRoutes from './modules/transactions/transactions.routes';
 import { errorHandler } from './middlewares/errorHandler';
 import path from 'path';
 import { isAuthenticated } from './middlewares/isAuthenticated';
@@ -32,6 +33,7 @@ app.use('/api/sections', isAuthenticated, sectionsRoutes);
 app.use('/api/challenges', isAuthenticated, challengesRoutes);
 app.use('/api/runner', isAuthenticated, codeRunnerRoutes);
 app.use('/api/achievements', isAuthenticated, achievementsRoutes);
+app.use('/api/transactions', isAuthenticated, transactionsRoutes);
 
 app.post('/api/stream', async (req, res) => {
   const search = req.body?.search || '';
