@@ -35,41 +35,6 @@ app.use('/api/runner', isAuthenticated, codeRunnerRoutes);
 app.use('/api/achievements', isAuthenticated, achievementsRoutes);
 app.use('/api/transactions', isAuthenticated, transactionsRoutes);
 
-app.post('/api/stream', async (req, res) => {
-  const search = req.body?.search || '';
-
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-
-  // Function to send data
-  const sendEvent = (event: string, data: unknown) => {
-    res.write(`${event}: ${JSON.stringify(data)}\n\n`);
-  };
-
-  const message = { role: 'user', content: `Answer the question: ${search}` };
-  const response = await ollama.chat({
-    model: 'llama3.2',
-    messages: [message],
-    stream: true,
-  });
-  for await (const part of response) {
-    sendEvent('data', { message: part.message.content });
-  }
-
-  sendEvent('end', {
-    message: 'Done',
-  });
-
-  // Handle client disconnection
-  req.on('close', () => {
-    res.end();
-    console.log('Client disconnected');
-  });
-});
-
 // Global error handler (should be after routes)
 app.use(errorHandler);
 
