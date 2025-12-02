@@ -34,6 +34,8 @@ export const getSectionHandler = async (
           difficulty: true,
           rewardPoints: true,
           sectionID: true,
+          type: true,
+          choices: true,
         },
         with: {
           answers: {
@@ -106,6 +108,34 @@ export const getSectionHandler = async (
 
   for (let challenge of selectedSection.challenges) {
     let challengeStatus = 'none';
+
+    // Parse and shuffle choices if challenge is multiple choice
+    if (challenge.type === 'multiple_choice' && challenge.choices) {
+      try {
+        let parsedChoices = JSON.parse(challenge.choices);
+
+        // Remove isCorrect property from each choice
+        parsedChoices = parsedChoices.map((choice: any) => {
+          const { isCorrect, ...rest } = choice;
+          return rest;
+        });
+
+        // Shuffle the choices using Fisher-Yates algorithm
+        for (let i = parsedChoices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [parsedChoices[i], parsedChoices[j]] = [
+            parsedChoices[j],
+            parsedChoices[i],
+          ];
+        }
+
+        (challenge as any).choices = parsedChoices;
+      } catch (error) {
+        console.error('Error parsing choices:', error);
+        (challenge as any).choices = null;
+      }
+    }
+
     if (
       challenge.answers.find(
         (x) =>

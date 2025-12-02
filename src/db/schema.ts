@@ -1,12 +1,14 @@
 import { relations } from 'drizzle-orm';
-import { tinyint,
+import {
+  tinyint,
   datetime,
   timestamp,
   int,
   mysqlTable,
   varchar,
   json,
-  text } from 'drizzle-orm/mysql-core';
+  text,
+} from 'drizzle-orm/mysql-core';
 
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -51,44 +53,44 @@ export const creditTransactions = mysqlTable('credit_transactions', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export type AchievementRule
-  = | {
-    type: 'streak';
-    length: number;
-    withoutWrong?: boolean;
-    chapterOrder: number;
-  }
+export type AchievementRule =
   | {
-    type: 'no_hints_streak';
-    length: number;
-  }
+      type: 'streak';
+      length: number;
+      withoutWrong?: boolean;
+      chapterOrder: number;
+    }
   | {
-    type: 'no_hints_total';
-    count: number;
-  }
+      type: 'no_hints_streak';
+      length: number;
+    }
   | {
-    type: 'time_to_solve_under_seconds';
-    seconds: number;
-    chapterOrder?: number;
-  }
+      type: 'no_hints_total';
+      count: number;
+    }
   | {
-    type: 'chapter_perfect';
-    chapterTitle: string;
-  }
+      type: 'time_to_solve_under_seconds';
+      seconds: number;
+      chapterOrder?: number;
+    }
   | {
-    type: 'daily_active_streak';
-    days: number;
-  }
+      type: 'chapter_perfect';
+      chapterTitle: string;
+    }
   | {
-    type: 'community_solution_shared';
-    approved: boolean;
-    count: number;
-  }
+      type: 'daily_active_streak';
+      days: number;
+    }
   | {
-    type: 'limited_hints_per_challenge';
-    maxHints: number;
-    count: number;
-  };
+      type: 'community_solution_shared';
+      approved: boolean;
+      count: number;
+    }
+  | {
+      type: 'limited_hints_per_challenge';
+      maxHints: number;
+      count: number;
+    };
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -137,7 +139,9 @@ export const courses = mysqlTable('courses', {
 
 export const chapters = mysqlTable('chapters', {
   id: int('id').autoincrement().primaryKey(),
-  courseId: int('course_id').notNull().references(() => courses.id),
+  courseId: int('course_id')
+    .notNull()
+    .references(() => courses.id),
   title: varchar('title', { length: 255 }).notNull().unique(),
   description: varchar('description', { length: 2048 }).notNull(),
   order: int('order').notNull(),
@@ -168,11 +172,17 @@ export const sections = mysqlTable('sections', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
+export type ChallengeType = 'code' | 'multiple_choice';
+
 export const challenges = mysqlTable('challenges', {
   id: int('id').autoincrement().primaryKey(),
   sectionID: int('section_id').references(() => sections.id),
   title: varchar({ length: 255 }).notNull().unique(),
   order: int().default(0),
+  type: varchar({ length: 50 })
+    .notNull()
+    .default('code')
+    .$type<ChallengeType>(),
   moduleType: varchar({ length: 100 }).notNull(),
   description: varchar({ length: 2048 }).notNull(),
   difficulty: varchar({ length: 50 }).notNull().$type<Difficulty>(),
@@ -180,6 +190,7 @@ export const challenges = mysqlTable('challenges', {
     unsigned: true,
   }).default(0),
   expectedOutput: varchar({ length: 2048 }).notNull(),
+  choices: text(),
   creditPoints: int().notNull(),
   rewardPoints: int().notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
