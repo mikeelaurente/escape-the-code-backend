@@ -82,6 +82,8 @@ export const getSectionHandler = async (
     });
   }
 
+  (selectedSection as any).locked = false;
+
   const challengeIds =
     selectedSection?.challenges.map((c) => Number(c.id)) ?? [];
 
