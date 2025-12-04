@@ -1,8 +1,8 @@
 import nodemailer from 'nodemailer';
-import { User } from '../db/schema';
 import ejs from 'ejs';
 import { getTemplateContent } from '../helpers/template.helper';
 import config from '../config/config';
+import { User } from '../db/schema';
 
 export class Mailer {
   private static transporter: nodemailer.Transporter;

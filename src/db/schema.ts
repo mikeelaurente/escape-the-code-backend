@@ -369,6 +369,8 @@ export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
   }),
 }));
 
+export type User = typeof users.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users);
 export type Section = typeof sections.$inferSelect;
 

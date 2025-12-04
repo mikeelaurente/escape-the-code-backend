@@ -13,7 +13,7 @@ export const getUserStatsHandler = async (
   try {
     const userId = Number(req.params.id);
     const userRank = await getUserRankingFor(userId);
-    const nextSection = await getNextSectionFor(userId);
+    const nextSection = null;
 
     const achievements = await db.query.userAchievements.findMany({
       where: eq(schema.userAchievements.userId, userId),

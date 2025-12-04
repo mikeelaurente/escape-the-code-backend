@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
-import { db } from './db';
 import * as schema from './db/schema';
 import * as bcrypt from 'bcryptjs';
+import { db } from './db';
 import { updateUserBalance } from './db/repositories/user.repository';
 
 async function main() {
@@ -18,6 +18,7 @@ async function main() {
     await tx.delete(schema.courseProgress);
     await tx.delete(schema.challengeAnswerSubmissions);
     await tx.delete(schema.challengeAnswers);
+    await tx.delete(schema.courseProgress);
     await tx.delete(schema.challenges);
     await tx.delete(schema.sections);
     await tx.delete(schema.chapters);
@@ -27,7 +28,7 @@ async function main() {
 
     // Seed demo users + credits
     for (let i = 0; i < 5; i++) {
-      let salt = await bcrypt.genSalt(10);
+      const salt = await bcrypt.genSalt(10);
 
       const hashedPassword = await bcrypt.hash('password', salt);
 
@@ -590,29 +591,33 @@ async function main() {
         title: ach.title,
         description: ach.description,
         icon: ach.icon,
-        rule: ach.rule as any,
-        difficulty: ach.difficulty as any,
+        rule: ach.rule as schema.AchievementRule,
+        difficulty: ach.difficulty as schema.Difficulty,
         rewardPoints: ach.rewardPoints,
         creditPoints: ach.creditPoints,
       });
     }
 
-    // Story
-    await tx.insert(schema.stories).values({
+    // course
+    await tx.insert(schema.courses).values({
       title: 'Code Quest: The Sparkling City of JS',
       description:
         'Join Zia and Pax as they explore the Sparkling City of JS. Learn JavaScript basics by solving tiny puzzles to light bridges, open doors, and help friendly bots. No OOP—just the building blocks!',
     });
 
-    const story = await tx.query.courses.findFirst({
-      where: eq(schema.stories.title, 'Code Quest: The Sparkling City of JS'),
+    const course = await tx.query.courses.findFirst({
+      where: eq(schema.courses.title, 'Code Quest: The Sparkling City of JS'),
     });
 
     type Challenge = {
       title: string;
       description: string; // Markdown instructions
       difficulty: 'easy' | 'medium' | 'hard';
-      tests: Array<{ input: any; expect?: any; expect_print?: any }>;
+      tests: Array<{
+        input: unknown;
+        expect?: unknown;
+        expect_print?: unknown;
+      }>;
       rewardPoints: number;
       creditPoints: number;
       moduleType: 'javascript';
@@ -1550,7 +1555,7 @@ async function main() {
               tests: [
                 { input: ['Zia', 'Hi'], expect_print: 'Zia says "Hi"!' },
                 {
-                  input: ['Pax', "It\'s ok"],
+                  input: ['Pax', "It's ok"],
                   expect_print: 'Pax says "It\'s ok"!',
                 },
                 { input: ['Bot', 'Beep'], expect_print: 'Bot says "Beep"!' },
@@ -3374,7 +3379,7 @@ async function main() {
       // INSERT CHAPTER 1
       await tx.insert(schema.chapters).values({
         title: chapter.title,
-        storyId: story!.id,
+        courseId: course!.id,
         description: chapter.description,
         rewardPoints: chapter.rewardPoints,
         creditPoints: chapter.creditPoints,
@@ -3414,7 +3419,7 @@ async function main() {
             sectionID: createdSection?.id,
             order: challengeOrder,
             description: ch.description,
-            difficulty: ch.difficulty as any,
+            difficulty: ch.difficulty as schema.Difficulty,
             expectedOutput: testsJson(ch.tests), // includes expect_print
             moduleType: ch.moduleType,
             rewardPoints: ch.rewardPoints,
@@ -3454,4 +3459,5 @@ async function main() {
 
 main()
   .then(() => console.log('Seeding completed'))
-  .catch((e) => console.error(e));
+  .catch((e) => console.error(e))
+  .finally(() => process.exit());
