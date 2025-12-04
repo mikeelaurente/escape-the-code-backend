@@ -8,5 +8,5 @@ export const submitAnswerSchema = z.object({
 });
 
 export const answerChallengeSchema = z.object({
-  answer: z.string().nonempty('Please select an answer.'),
+  answer: z.union([z.string(), z.number()]),
 });

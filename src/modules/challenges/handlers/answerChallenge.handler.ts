@@ -6,6 +6,7 @@ import * as challengesSchema from '../challenges.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
 import { onChallengeCompleted } from '../../../services/achievements.service';
+import { getNextSectionFor } from '../../../db/repositories/story.repository';
 
 export const answerChallengeHandler = async (
   req: Request,
@@ -149,7 +150,7 @@ export const answerChallengeHandler = async (
       userId,
       challengeId,
       challengeAnswerId: existingAnswer.id,
-      code: userAnswer,
+      code: String(userAnswer),
       result: isCorrect ? 'passed' : 'failed',
       codeOutput: isCorrect ? 'Correct!' : 'Incorrect',
       metadata: JSON.stringify({
@@ -172,23 +173,24 @@ export const answerChallengeHandler = async (
 
       await updateUserBalance(userId);
 
-      // Update course progress
-      if (challenge.sectionID) {
-        const challengeWithDetails = await db.query.challenges.findFirst({
-          where: eq(schema.challenges.id, challengeId),
-          with: {
-            section: {
-              with: {
-                chapter: {
-                  with: {
-                    course: true,
-                  },
+      // Get challenge with details for course progress
+      const challengeWithDetails = await db.query.challenges.findFirst({
+        where: eq(schema.challenges.id, challengeId),
+        with: {
+          section: {
+            with: {
+              chapter: {
+                with: {
+                  course: true,
                 },
               },
             },
           },
-        });
+        },
+      });
 
+      // Update course progress
+      if (challenge.sectionID) {
         const inserted = await db.query.courseProgress.findFirst({
           where: and(
             eq(schema.courseProgress.userId, userId),
@@ -215,6 +217,12 @@ export const answerChallengeHandler = async (
       } catch (error) {
         console.error('Error checking achievements:', error);
       }
+
+      // Get next section
+      const courseId = challengeWithDetails?.section?.chapter?.courseId;
+      const nextSection = courseId
+        ? await getNextSectionFor(userId, courseId)
+        : null;
 
       // Get updated challenge answer with submission
       const acceptedAnswer = await db.query.challengeAnswers.findFirst({
@@ -243,6 +251,11 @@ export const answerChallengeHandler = async (
           feedback,
           choices,
           acceptedAnswer,
+          nextSection: nextSection && {
+            id: nextSection.id,
+            chapterId: nextSection.chapterId,
+            title: nextSection.title,
+          },
         },
       });
     } else {
@@ -256,6 +269,28 @@ export const answerChallengeHandler = async (
         }
       }
 
+      // Get challenge with details for next section
+      const challengeWithDetails = await db.query.challenges.findFirst({
+        where: eq(schema.challenges.id, challengeId),
+        with: {
+          section: {
+            with: {
+              chapter: {
+                with: {
+                  course: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Get next section
+      const courseId = challengeWithDetails?.section?.chapter?.courseId;
+      const nextSection = courseId
+        ? await getNextSectionFor(userId, courseId)
+        : null;
+
       return res.json({
         status: 'ok',
         data: {
@@ -264,6 +299,11 @@ export const answerChallengeHandler = async (
           correctAnswer,
           feedback,
           choices,
+          nextSection: nextSection && {
+            id: nextSection.id,
+            chapterId: nextSection.chapterId,
+            title: nextSection.title,
+          },
         },
       });
     }
