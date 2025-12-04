@@ -259,16 +259,6 @@ export const answerChallengeHandler = async (
         },
       });
     } else {
-      // Parse choices if available
-      let choices = null;
-      if (challenge.choices) {
-        try {
-          choices = JSON.parse(challenge.choices);
-        } catch (error) {
-          console.error('Error parsing choices:', error);
-        }
-      }
-
       // Get challenge with details for next section
       const challengeWithDetails = await db.query.challenges.findFirst({
         where: eq(schema.challenges.id, challengeId),
@@ -285,11 +275,51 @@ export const answerChallengeHandler = async (
         },
       });
 
+      // Update course progress (even for incorrect answers since it's a one-attempt challenge)
+      if (challenge.sectionID) {
+        const inserted = await db.query.courseProgress.findFirst({
+          where: and(
+            eq(schema.courseProgress.userId, userId),
+            eq(
+              schema.courseProgress.sectionId,
+              Number(challengeWithDetails?.sectionID),
+            ),
+          ),
+        });
+
+        if (!inserted && challengeWithDetails?.section) {
+          await db.insert(schema.courseProgress).values({
+            courseId: challengeWithDetails.section.chapter?.courseId,
+            chapterId: challengeWithDetails.section.chapterId,
+            sectionId: challengeWithDetails.sectionID,
+            userId,
+          });
+        }
+      }
+
+      // Parse choices if available
+      let choices = null;
+      if (challenge.choices) {
+        try {
+          choices = JSON.parse(challenge.choices);
+        } catch (error) {
+          console.error('Error parsing choices:', error);
+        }
+      }
+
       // Get next section
       const courseId = challengeWithDetails?.section?.chapter?.courseId;
       const nextSection = courseId
         ? await getNextSectionFor(userId, courseId)
         : null;
+
+      // Get updated challenge answer with submission
+      const completedAnswer = await db.query.challengeAnswers.findFirst({
+        where: eq(schema.challengeAnswers.id, existingAnswer.id),
+        with: {
+          submissions: true,
+        },
+      });
 
       return res.json({
         status: 'ok',
@@ -299,6 +329,7 @@ export const answerChallengeHandler = async (
           correctAnswer,
           feedback,
           choices,
+          completedAnswer,
           nextSection: nextSection && {
             id: nextSection.id,
             chapterId: nextSection.chapterId,
