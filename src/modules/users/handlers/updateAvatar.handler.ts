@@ -35,7 +35,7 @@ export const updateAvatarHandler = async (
       status: 'ok',
       message: 'Profile photo has been updated successfully',
       data: {
-        avatar: resolveAvatar(avatar?.filename || 'user.png'),
+        avatar: resolveAvatar(avatar?.filename || 'default'),
       },
     });
   } catch (e) {

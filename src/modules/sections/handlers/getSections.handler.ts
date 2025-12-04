@@ -7,6 +7,7 @@ import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { SectionsQueryParamsSchema } from '../../../types/section';
 import QueryString from 'qs';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
+import { resolveSectionImage } from '../../../helpers/image.helper';
 
 export const getSectionsHandler = async (
   req: Request,
@@ -63,6 +64,14 @@ export const getSectionsHandler = async (
     const offset = Number(query.limit * (query.page - 1));
     const sections = await db.query.sections.findMany({
       where: and(...sql),
+      with: {
+        chapter: {
+          columns: {
+            id: true,
+            courseId: true,
+          },
+        },
+      },
       orderBy: order,
       limit: Number(query.limit ?? 5),
       offset: offset,
@@ -78,7 +87,17 @@ export const getSectionsHandler = async (
     });
 
     const completedSections = progress.map((p) => p.sectionId);
-    const assignedSection = await getNextSectionFor(userId);
+
+    const courseIds = Array.from(
+      new Set(sections.map((s) => s.chapter.courseId)),
+    );
+
+    console.log('courseIds', courseIds);
+    const assignedSections: any = {};
+    for (const cId of courseIds) {
+      const assignedSection = await getNextSectionFor(userId, cId);
+      assignedSections[cId] = assignedSection;
+    }
 
     const allSections = sections.map((s) => {
       const modifiedSection = {
@@ -87,6 +106,9 @@ export const getSectionsHandler = async (
         completed: completedSections.includes(s.id),
       };
 
+      const assignedSection = assignedSections[s.chapter.courseId];
+      console.log('assignedSection', assignedSection, s.chapter.courseId);
+
       if (isFirstSectionGreaterThanOrSame(assignedSection, s)) {
         modifiedSection.locked = false;
       }
@@ -94,6 +116,7 @@ export const getSectionsHandler = async (
       return {
         id: modifiedSection.id,
         title: modifiedSection.title,
+        coverImage: resolveSectionImage(s.coverImage || 'default'),
         locked: assignedSection.id ? modifiedSection.locked : false,
         completed: assignedSection.id ? modifiedSection.completed : true,
         description: modifiedSection.description,

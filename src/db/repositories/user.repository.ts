@@ -128,7 +128,7 @@ export const getUserRanking = async (
     ...rankings.map((rank, idx) => ({
       ...rank,
       points: Number(rank.points),
-      photoUrl: resolveAvatar(rank.photoUrl),
+      photoUrl: resolveAvatar(rank.photoUrl || 'default'),
     })),
   ];
 
@@ -192,8 +192,8 @@ export const getUserRankingFor = async (userId: number) => {
     ...ranking.map((rank, idx) => ({
       ...rank,
       points: Number(rank.points),
-      photoUrl: resolveAvatar(rank.photoUrl),
-      banner: resolveBanner(rank.bannerUrl),
+      photoUrl: resolveAvatar(rank.photoUrl || 'default'),
+      banner: resolveBanner(rank.bannerUrl || 'default'),
     })),
   ];
 
@@ -227,8 +227,8 @@ export const getUserDashboard = async (userId: number) => {
       ...rank,
       rank: idx + 1,
       points: Number(rank.points),
-      photoUrl: resolveAvatar(rank.photoUrl),
-      banner: resolveBanner(rank.bannerUrl),
+      photoUrl: resolveAvatar(rank.photoUrl || 'default'),
+      banner: resolveBanner(rank.bannerUrl || 'default'),
     })),
   ];
 

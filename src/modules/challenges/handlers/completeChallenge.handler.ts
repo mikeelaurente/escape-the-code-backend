@@ -198,7 +198,8 @@ Important Rules:
         feedback = 'No feedback.';
       }
 
-      nextSection = await getNextSectionFor(userId, tx);
+      const courseId = challengeWithDetails?.section?.chapter?.courseId;
+      nextSection = await getNextSectionFor(userId, courseId!, tx);
 
       await tx
         .update(schema.challengeAnswers)

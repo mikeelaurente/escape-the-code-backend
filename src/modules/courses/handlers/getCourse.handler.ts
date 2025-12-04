@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
+import { resolveChapterImage } from '../../../helpers/image.helper';
 
 export const getCourseHandler = async (
   req: Request,
@@ -47,7 +48,7 @@ export const getCourseHandler = async (
       });
     });
 
-    const assignedSection = await getNextSectionFor(userId);
+    const assignedSection = await getNextSectionFor(userId, story.id);
 
     const response = {
       id: story.id,
@@ -58,6 +59,7 @@ export const getCourseHandler = async (
         id: c.id,
         order: c.order,
         courseId: c.courseId,
+        coverImage: resolveChapterImage(c.coverImage || 'default'),
         title: c.title,
         sections: c.sections,
         tags: c.tags ? c.tags?.split(',') : [],

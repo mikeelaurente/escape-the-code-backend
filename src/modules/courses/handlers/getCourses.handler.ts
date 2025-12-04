@@ -6,6 +6,11 @@ import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { CourseDto, CoursesQueryParamsSchema } from '../../../types/course';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import QueryString from 'qs';
+import {
+  resolveChapterImage,
+  resolveCourseImage,
+  resolveImage,
+} from '../../../helpers/image.helper';
 
 export const getCoursesHandler = async (
   req: Request,
@@ -96,17 +101,27 @@ export const getCoursesHandler = async (
       }),
     );
 
-    const assignedSection = await getNextSectionFor(userId);
+    const assignedSections: any = {};
+    for (const cour of courses) {
+      const assignedSection = await getNextSectionFor(userId, cour.id);
+      assignedSections[cour.id] = assignedSection;
+    }
 
     const response = courses.map((course) => ({
       id: course.id,
       title: course.title,
       description: course.description,
+      coverImage: resolveCourseImage(course.coverImage || 'default'),
       progress: course.progress,
       chapters: course.chapters.map((c) => ({
         ...c,
-        completed: assignedSection.id ? c.id < assignedSection.chapterId : true,
-        locked: assignedSection.id ? c.id > assignedSection.chapterId : false,
+        coverImage: resolveChapterImage(c.coverImage || 'default'),
+        completed: assignedSections[course.id].chapterId
+          ? c.id < assignedSections[course.id].chapterId
+          : true,
+        locked: assignedSections[course.id].chapterId
+          ? c.id > assignedSections[course.id].chapterId
+          : false,
       })),
     }));
 

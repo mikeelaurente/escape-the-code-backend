@@ -20,7 +20,10 @@ import { getUserRanking } from '../../../db/repositories/user.repository';
 import QueryString from 'qs';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { AchievementsQueryParamsSchema } from '../../../types/achievement';
-import { resolveImage } from '../../../helpers/image.helper';
+import {
+  resolveAchievementImage,
+  resolveImage,
+} from '../../../helpers/image.helper';
 
 export const getAchievementsHandler = async (
   req: Request,
@@ -91,8 +94,7 @@ export const getAchievementsHandler = async (
 
     const data = achievements.map((a, idx) => ({
       ...a,
-      // coverImage: a.coverImage ? resolveImage('user.png', 'avatar') : null,
-      coverImage: idx % 2 === 0 ? resolveImage('user.png', 'avatar') : null,
+      coverImage: resolveAchievementImage(a.coverImage || 'default'),
     }));
 
     res.json({

@@ -4,6 +4,7 @@ import * as schema from '../../db/schema';
 
 export const getNextSectionFor = async (
   studentId: number,
+  courseId: number,
   tx?: EscapeTheCodeTransaction,
 ) => {
   const query = sql`
@@ -22,6 +23,7 @@ export const getNextSectionFor = async (
             LEFT JOIN course_progress sp ON s.id = sp.section_id
                 AND sp.user_id = ${studentId}
         WHERE sp.section_id IS NULL 
+                AND c.course_id = ${courseId}
         ORDER BY c.order, s.order
         LIMIT 1;
     `;

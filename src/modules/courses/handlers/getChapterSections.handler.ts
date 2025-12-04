@@ -4,6 +4,7 @@ import * as schema from '../../../db/schema';
 import { asc, eq, and } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
+import { resolveSectionImage } from '../../../helpers/image.helper';
 
 export const getChapterSectionsHandler = async (
   req: Request,
@@ -67,7 +68,7 @@ export const getChapterSectionsHandler = async (
     }
 
     const completedSections = progress.map((p) => p.sectionId);
-    const assignedSection = await getNextSectionFor(userId);
+    const assignedSection = await getNextSectionFor(userId, chapter.courseId);
 
     const allSections = chapter.sections.map((s) => {
       const modifiedSection = {
@@ -86,7 +87,9 @@ export const getChapterSectionsHandler = async (
         locked: modifiedSection.locked,
         completed: modifiedSection.completed,
         description: modifiedSection.description,
-        coverImage: modifiedSection.coverImage,
+        coverImage: resolveSectionImage(
+          modifiedSection.coverImage || 'default',
+        ),
         order: modifiedSection.order,
       };
     });

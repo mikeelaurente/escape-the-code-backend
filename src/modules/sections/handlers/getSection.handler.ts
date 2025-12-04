@@ -4,6 +4,7 @@ import * as schema from '../../../db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 import { isFirstSectionGreaterThanOrSame } from '../../../helpers/section.helper';
+import { resolveSectionImage } from '../../../helpers/image.helper';
 
 export const getSectionHandler = async (
   req: Request,
@@ -12,8 +13,6 @@ export const getSectionHandler = async (
 ) => {
   const sectionId = parseInt(req.params.id || '');
   const userId = Number(req.user?.id);
-
-  const assignedSection = await getNextSectionFor(userId);
 
   const selectedSection = await db.query.sections.findFirst({
     where: eq(schema.sections.id, sectionId),
@@ -90,6 +89,9 @@ export const getSectionHandler = async (
     res.status(404).json({ status: 'error', message: 'Section not found' });
     return;
   }
+
+  const courseId = selectedSection?.chapter.courseId!;
+  const assignedSection = await getNextSectionFor(userId, courseId);
 
   if (
     assignedSection.id &&
@@ -189,7 +191,7 @@ export const getSectionHandler = async (
       (acceptedAnswer as any).submission = successfulSubmission;
       (challenge as any).acceptedAnswer = acceptedAnswer;
 
-      nextSection = await getNextSectionFor(userId);
+      nextSection = await getNextSectionFor(userId, courseId);
     } else if (
       challenge.answers.find((x) => x.status === schema.ChallengeStatus.Ongoing)
     ) {
@@ -203,6 +205,7 @@ export const getSectionHandler = async (
     status: 'ok',
     data: {
       ...selectedSection,
+      coverImage: resolveSectionImage(selectedSection.coverImage || 'default'),
       creditUsages,
       nextSection: nextSection && {
         id: nextSection.id,
