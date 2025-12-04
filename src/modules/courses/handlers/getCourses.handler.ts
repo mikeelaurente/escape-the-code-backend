@@ -20,7 +20,7 @@ export const getCoursesHandler = async (
   try {
     const userId = Number(req.user?.id);
 
-    const url = new URL(req.host + req.originalUrl);
+    const url = new URL(req.protocol + '://' + req.host + req.originalUrl);
     const queryParams = QueryString.parse(url?.searchParams.toString() || '');
 
     const result = CoursesQueryParamsSchema.safeParse(queryParams);

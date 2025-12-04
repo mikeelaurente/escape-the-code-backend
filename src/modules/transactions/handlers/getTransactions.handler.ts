@@ -4,7 +4,11 @@ import * as schema from '../../../db/schema';
 import { and, asc, desc, eq, like, or, SQL } from 'drizzle-orm';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import QueryString from 'qs';
-import { CreditTransactionGroupFilters, CreditTransactionsQueryParamsSchema, CreditTransactionTypeFilters } from '../../../types/transaction';
+import {
+  CreditTransactionGroupFilters,
+  CreditTransactionsQueryParamsSchema,
+  CreditTransactionTypeFilters,
+} from '../../../types/transaction';
 
 export const getTransactionsHandler = async (
   req: Request,
@@ -14,7 +18,7 @@ export const getTransactionsHandler = async (
   try {
     const userId = Number(req.user?.id);
 
-    const url = new URL(req.host + req.originalUrl);
+    const url = new URL(req.protocol + '://' + req.host + req.originalUrl);
     const queryParams = QueryString.parse(url?.searchParams.toString() || '');
 
     const result = CreditTransactionsQueryParamsSchema.safeParse(queryParams);
@@ -26,9 +30,7 @@ export const getTransactionsHandler = async (
     }
 
     const query = result.data;
-    const sql: SQL<unknown>[] = [
-      eq(schema.creditTransactions.userId, userId)
-    ];
+    const sql: SQL<unknown>[] = [eq(schema.creditTransactions.userId, userId)];
     let order = desc(schema.creditTransactions.id);
 
     if (query.sort && query.sort.name && query.sort.name.trim().length > 0) {
@@ -50,15 +52,25 @@ export const getTransactionsHandler = async (
 
     if (query.search && query.search.trim().length > 0) {
       sql.push(
-        or(like(schema.creditTransactions.title, `%${query.search}%`)) as SQL<unknown>,
+        or(
+          like(schema.creditTransactions.title, `%${query.search}%`),
+        ) as SQL<unknown>,
       );
     }
 
-    if (query.filters?.type && query.filters.type !== 'all' && CreditTransactionTypeFilters.includes(query.filters.type)) {
+    if (
+      query.filters?.type &&
+      query.filters.type !== 'all' &&
+      CreditTransactionTypeFilters.includes(query.filters.type)
+    ) {
       sql.push(eq(schema.creditTransactions.type, query.filters.type));
     }
 
-    if (query.filters?.group && query.filters.group !== 'all' && CreditTransactionGroupFilters.includes(query.filters.group)) {
+    if (
+      query.filters?.group &&
+      query.filters.group !== 'all' &&
+      CreditTransactionGroupFilters.includes(query.filters.group)
+    ) {
       sql.push(eq(schema.creditTransactions.group, query.filters.group));
     }
 
