@@ -4,7 +4,6 @@ import ollama, { AbortableAsyncIterator, ChatResponse } from 'ollama';
 
 export function generateFeedback(args: string): Promise<string> {
   const query = Buffer.from(args).toString('base64');
-  console.log(query);
   const scriptPath = path.join(__dirname, '../npc/runner.py');
   return new Promise((resolve, reject) => {
     const pythonProcess = spawn(process.env.PYTHON_EXEC!, [
@@ -26,9 +25,6 @@ export function generateFeedback(args: string): Promise<string> {
 
     pythonProcess.on('close', (code) => {
       if (code === 0) {
-        console.log('######################################');
-        console.log(scriptOutput);
-        console.log('######################################');
         resolve(scriptOutput.trim());
       } else {
         reject(

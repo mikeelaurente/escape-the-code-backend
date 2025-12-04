@@ -24,7 +24,6 @@ export async function isAuthenticated(
 
   try {
     const decoded = await jwtHelper.verify<{ id: number }>(accessToken);
-    console.log('decode', decoded);
 
     req.user = {
       id: decoded.id,

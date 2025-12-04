@@ -461,8 +461,6 @@ export async function runWithDenoWindows({
     opts: { softenCpu, timeoutMs },
   });
 
-  console.log('########userCodeResult', userCodeResult);
-
   if (
     syntaxCheckResult.status === 'parse_error' &&
     userCodeResult.status === 'ok' &&

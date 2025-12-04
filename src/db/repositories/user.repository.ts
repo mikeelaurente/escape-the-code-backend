@@ -70,8 +70,9 @@ export async function updateUserBalance(
     .where(eq(schema.users.id, uid));
 }
 
-export const getUserRanking = async (options: RankingRequest): Promise<Paginated<UserRanking>> => {
-
+export const getUserRanking = async (
+  options: RankingRequest,
+): Promise<Paginated<UserRanking>> => {
   let search = options.search ?? '';
   const page = options.page ?? 1;
   const limit = options.limit ?? 10;
@@ -81,8 +82,8 @@ export const getUserRanking = async (options: RankingRequest): Promise<Paginated
   if (search.length > 0) {
     searchSql = sql`WHERE
         email LIKE CONCAT('%', ${search}, '%')
-        OR firstName LIKE CONCAT('%', ${search}, '%')
-        OR lastName LIKE CONCAT('%', ${search}, '%')
+        OR first_name LIKE CONCAT('%', ${search}, '%')
+        OR last_name LIKE CONCAT('%', ${search}, '%')
     `;
   }
 
@@ -95,15 +96,15 @@ export const getUserRanking = async (options: RankingRequest): Promise<Paginated
           SELECT
             u.id,
             u.email,
-            u.firstName,
-            u.lastName,
-            u.photoUrl,
+            u.first_name AS firstName,
+            u.last_name AS lastName,
+            u.photo_url AS photoUrl,
             SUM(rewardPoints) AS points,
             (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total
             FROM challenge_answers ca
             JOIN users u ON u.id = ca.user_id
-          WHERE \`status\` = 1
+          WHERE ca.\`status\` = 1
           GROUP BY u.id
           ORDER BY points DESC
         ) x,
@@ -113,7 +114,6 @@ export const getUserRanking = async (options: RankingRequest): Promise<Paginated
       ${searchSql}
     `;
 
-  console.log(query.getSQL().queryChunks);
   const [total] = await db.execute<{ cnt: number }>(sql`
     SELECT COUNT(*) as cnt
     FROM (${query}) t
@@ -124,7 +124,7 @@ export const getUserRanking = async (options: RankingRequest): Promise<Paginated
     OFFSET ${offset}
   `);
   const rankings = result as any as UserRanking[];
-  const data =  [
+  const data = [
     ...rankings.map((rank, idx) => ({
       ...rank,
       points: Number(rank.points),
@@ -136,8 +136,8 @@ export const getUserRanking = async (options: RankingRequest): Promise<Paginated
     data: data,
     limit: limit,
     page: page,
-    total: (total as any as { cnt: number}[])[0]?.cnt ?? 0
-  }
+    total: (total as any as { cnt: number }[])[0]?.cnt ?? 0,
+  };
 };
 
 export const getUserRankingFor = async (userId: number) => {
@@ -152,7 +152,7 @@ export const getUserRankingFor = async (userId: number) => {
                   SUM(rewardPoints) AS points
                   FROM challenge_answers ca
                   JOIN users u ON u.id = ca.user_id
-              WHERE \`status\` = 1
+              WHERE ca.\`status\` = 1
               GROUP BY u.id
               ORDER BY points DESC
             ) x,
@@ -161,21 +161,21 @@ export const getUserRankingFor = async (userId: number) => {
         SELECT
             u.id,
             u.email,
-            u.firstName,
-            u.lastName,
+            u.first_name AS firstName,
+            u.last_name AS lastName,
             u.about,
-            u.photoUrl,
-            u.bannerUrl,
+            u.photo_url AS photoUrl,
+            u.banner_url AS bannerUrl,
             r.\`rank\`,
             r.points,
             (SELECT COUNT(*) FROM course_progress sp WHERE sp.user_id = u.id) completed,
             (SELECT COUNT(*) FROM sections) total,
             (SELECT MIN(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration
-              FROM challenge_answers WHERE STATUS = 1 AND user_id = ${userId}
+              FROM challenge_answers ca WHERE ca.status = 1 AND user_id = ${userId}
               GROUP BY user_id
             ) shortestTime,
             (SELECT MAX(TIMESTAMPDIFF(SECOND, created_at, completed_at)) AS duration
-              FROM challenge_answers WHERE STATUS = 1 AND user_id = ${userId}
+              FROM challenge_answers ca WHERE ca.status = 1 AND user_id = ${userId}
               GROUP BY user_id
             ) longestTime
             FROM users u
@@ -187,7 +187,6 @@ export const getUserRankingFor = async (userId: number) => {
     shortestTime: number;
     longestTime: number;
   };
-  console.log('ranking', ranking);
   const port = config.port;
   const userRank = [
     ...ranking.map((rank, idx) => ({
@@ -206,8 +205,8 @@ export const getUserDashboard = async (userId: number) => {
         SELECT
             u.id,
             u.email,
-            u.firstName,
-            u.lastName,
+            u.first_name AS firstName,
+            u.last_name AS lastName,
             u.about,
             u.photoUrl,
             u.bannerUrl,
@@ -223,8 +222,6 @@ export const getUserDashboard = async (userId: number) => {
     `;
   const [result, _] = await db.execute<UserRanking>(query);
   const ranking = result as any as UserRanking[];
-  console.log('ranking', ranking);
-  const port = config.port;
   const userRank = [
     ...ranking.map((rank, idx) => ({
       ...rank,
@@ -347,7 +344,6 @@ export const getSectionAnswersWithHints = async (
           ORDER BY c.\`order\`, s.\`order\` ASC;
     `;
 
-  console.log(sql);
   const [result, _] = await db.execute(query);
   const data = result as any as {
     chapterId: number;

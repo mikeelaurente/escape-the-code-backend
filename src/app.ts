@@ -13,7 +13,7 @@ import path from 'path';
 import { isAuthenticated } from './middlewares/isAuthenticated';
 import cors from 'cors';
 import { setRootPath } from './helpers/template.helper';
-import ollama from 'ollama';
+import config from './config/config';
 
 setRootPath(__dirname);
 
@@ -24,6 +24,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, '../', 'public')));
+
+const adminPublicPath = path.resolve(config.uploadsPath);
+app.use('/uploads', express.static(adminPublicPath));
 
 // Routes
 app.use('/api/auth', authRoutes);

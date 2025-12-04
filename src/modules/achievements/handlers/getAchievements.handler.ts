@@ -33,8 +33,6 @@ export const getAchievementsHandler = async (
     const url = new URL(req.host + req.originalUrl);
     const queryParams = QueryString.parse(url?.searchParams.toString() || '');
 
-    console.log('queryParams', queryParams);
-
     const result = AchievementsQueryParamsSchema.safeParse(queryParams);
     if (!result.success) {
       return res.json({
@@ -95,7 +93,7 @@ export const getAchievementsHandler = async (
       ...a,
       // coverImage: a.coverImage ? resolveImage('user.png', 'avatar') : null,
       coverImage: idx % 2 === 0 ? resolveImage('user.png', 'avatar') : null,
-    }))
+    }));
 
     res.json({
       status: 'ok',

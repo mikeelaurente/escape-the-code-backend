@@ -15,18 +15,26 @@ import { createInsertSchema } from 'drizzle-zod';
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
   email: varchar({ length: 255 }).notNull().unique(),
-  hashedPassword: varchar({ length: 255 }),
-  firstName: varchar({ length: 255 }).notNull(),
-  lastName: varchar({ length: 255 }).notNull(),
+  hashedPassword: varchar('hashed_password', { length: 255 }),
+  firstName: varchar('first_name', { length: 255 }).notNull(),
+  lastName: varchar('last_name', { length: 255 }).notNull(),
+  userType: varchar('user_type', { length: 20 })
+    .notNull()
+    .default('user')
+    .$type<'admin' | 'user'>(),
+  status: varchar({ length: 20 })
+    .notNull()
+    .default('active')
+    .$type<'active' | 'inactive'>(),
   credits: int().notNull().default(0),
   about: text(),
-  photoUrl: varchar({ length: 255 }).default('user.png'),
+  photoUrl: varchar('photo_url', { length: 255 }).default('user.png'),
   verified: tinyint('verified', { unsigned: true }).default(0),
   verificationToken: varchar('verification_token', { length: 200 }).unique(),
   verifiedAt: timestamp('verified_at'),
   passwordResetToken: varchar('password_reset_token', { length: 200 }),
   passwordResetExpiration: timestamp('password_reset_expiration'),
-  bannerUrl: varchar({ length: 255 }).default('banner.png'),
+  bannerUrl: varchar('banner_url', { length: 255 }).default('banner.png'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });

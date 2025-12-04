@@ -12,7 +12,6 @@ export const getNextSectionHandler = async (
   const userId = Number(req.user?.id);
 
   const nextSection = await storyRepo.getNextSectionFor(userId);
-  console.log(nextSection);
 
   return res.json(nextSection);
 };

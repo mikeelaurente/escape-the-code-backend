@@ -31,8 +31,6 @@ export const loginHandler = async (
       where: eq(schema.users.email, email),
     });
 
-    console.log('user', user);
-
     if (!user) {
       return res.json({
         status: 'error',

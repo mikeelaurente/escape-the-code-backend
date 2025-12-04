@@ -17,12 +17,29 @@ export const getSectionHandler = async (
 
   const selectedSection = await db.query.sections.findFirst({
     where: eq(schema.sections.id, sectionId),
+    columns: {
+      id: true,
+      title: true,
+      description: true,
+      coverImage: true,
+      content: true,
+      order: true,
+      runnables: true,
+      trivias: true,
+      additionalResources: true,
+      rewardPoints: true,
+      creditPoints: true,
+      chapterId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
     with: {
       chapter: {
         columns: {
           id: true,
           title: true,
           courseId: true,
+          coverImage: true,
         },
       },
       challenges: {

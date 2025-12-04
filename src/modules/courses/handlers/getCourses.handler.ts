@@ -28,7 +28,7 @@ export const getCoursesHandler = async (
 
     const query = result.data;
     const sql: SQL<unknown>[] = [];
-    let order = desc(schema.courses.id);
+    let order = asc(schema.courses.id);
 
     if (query.sort && query.sort.name && query.sort.name.trim().length > 0) {
       const whitelisted = {
@@ -55,11 +55,31 @@ export const getCoursesHandler = async (
 
     const offset = Number(query.limit * (query.page - 1));
     const courses = await db.query.courses.findMany({
+      columns: {
+        id: true,
+        title: true,
+        description: true,
+        coverImage: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       with: {
         progress: {
           where: eq(schema.courseProgress.userId, userId),
         },
-        chapters: true,
+        chapters: {
+          columns: {
+            id: true,
+            title: true,
+            description: true,
+            coverImage: true,
+            order: true,
+            rewardPoints: true,
+            creditPoints: true,
+            tags: true,
+            courseId: true,
+          },
+        },
       },
       where: and(...sql),
       orderBy: order,

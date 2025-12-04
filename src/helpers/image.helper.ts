@@ -1,7 +1,8 @@
 import config from '../config/config';
 
 export function resolveImage(imageName: string, type: 'avatar' | 'banner') {
-  return `${config.domainName}/${type}s/${imageName}`;
+  imageName = imageName.replace(`/uploads/${type}s/`, '');
+  return `${config.domainName}/uploads/${type}s/${imageName}`;
 }
 
 export const resolveAvatar = (imageName: string) =>

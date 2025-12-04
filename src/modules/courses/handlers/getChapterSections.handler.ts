@@ -25,8 +25,35 @@ export const getChapterSectionsHandler = async (
     });
     const chapter = await db.query.chapters.findFirst({
       where: eq(schema.chapters.id, chapterId),
+      columns: {
+        id: true,
+        title: true,
+        description: true,
+        coverImage: true,
+        order: true,
+        rewardPoints: true,
+        creditPoints: true,
+        tags: true,
+        courseId: true,
+      },
       with: {
         sections: {
+          columns: {
+            id: true,
+            title: true,
+            description: true,
+            coverImage: true,
+            order: true,
+            content: true,
+            runnables: true,
+            rewardPoints: true,
+            creditPoints: true,
+            chapterId: true,
+            trivias: true,
+            additionalResources: true,
+            createdAt: true,
+            updatedAt: true,
+          },
           orderBy: asc(schema.sections.order),
         },
       },
@@ -59,6 +86,8 @@ export const getChapterSectionsHandler = async (
         locked: modifiedSection.locked,
         completed: modifiedSection.completed,
         description: modifiedSection.description,
+        coverImage: modifiedSection.coverImage,
+        order: modifiedSection.order,
       };
     });
 

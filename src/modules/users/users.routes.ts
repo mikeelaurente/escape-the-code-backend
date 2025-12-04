@@ -3,12 +3,13 @@ import * as handlers from './handlers';
 import path from 'path';
 
 import multer from 'multer';
+import config from '../../config/config';
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const type = req.query.type || 'avatar';
     const folder = type === 'banner' ? 'banners' : 'avatars';
-    cb(null, `public/${folder}`);
+    cb(null, config.uploadsPath + `/${folder}`);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);

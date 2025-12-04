@@ -32,8 +32,6 @@ export const verificationConfirmHandler = async (
       where: eq(schema.users.verificationToken, token),
     });
 
-    console.log('user', user);
-
     if (!user) {
       return res.json({
         status: 'error',

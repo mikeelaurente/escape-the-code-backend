@@ -426,8 +426,6 @@ async function eval_daily_active_streak(userId: number, daysRequired: number) {
 export async function onChallengeCompleted(answerId: number) {
   const ctx = await getSolvedAnswerContext(answerId);
 
-  console.log(ctx);
-
   // Pull ALL achievements (each has a single rule)
   const all = await db.select().from(T.achievements);
   const achievementsAwarded: string[] = [];
@@ -487,7 +485,6 @@ export async function onChallengeCompleted(answerId: number) {
     }
 
     if (satisfied) {
-      console.log(`Awarding achievement ${a.code} to user ${ctx.userId}`);
       const awarded = await awardAchievementOnce(ctx.userId!, a.id);
       if (awarded) {
         achievementsAwarded.push(a.code);

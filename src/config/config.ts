@@ -8,6 +8,7 @@ interface Config {
   jwtSecret: string;
   domainName: string;
   frontendUrl: string;
+  uploadsPath: string;
   mail: {
     from: string;
     host: string;
@@ -27,6 +28,7 @@ const config: Config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
   jwtSecret: process.env.JWT_SECRET || '',
+  uploadsPath: process.env.UPLOADS_PATH || 'uploads',
   domainName:
     process.env.DOMAIN_NAME || 'http://localhost:' + (process.env.PORT || 3000),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5000',

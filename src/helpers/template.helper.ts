@@ -12,7 +12,6 @@ export async function getTemplateContent(fileName: string) {
     const templateFile = path.resolve(
       path.join(rootPath, 'templates', fileName),
     );
-    console.log('##### TEMPLATE FILE #####', templateFile);
     const stat = await fs.lstat(templateFile);
     if (!stat || !stat.isFile()) {
       return null;

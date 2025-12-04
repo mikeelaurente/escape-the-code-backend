@@ -3,7 +3,6 @@ import { db } from '../../../db';
 import * as schema from '../../../db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
-import { getUserRanking } from '../../../db/repositories/user.repository';
 
 export const getCourseHandler = async (
   req: Request,
@@ -49,7 +48,6 @@ export const getCourseHandler = async (
     });
 
     const assignedSection = await getNextSectionFor(userId);
-    console.log('assignedSection', assignedSection);
 
     const response = {
       id: story.id,

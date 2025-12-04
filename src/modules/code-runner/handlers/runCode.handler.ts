@@ -31,7 +31,5 @@ export const runCodeHandler = async (
     softenCpu: false,
   });
 
-  console.log('runnerResponse', runnerResponse);
-
   res.json(runnerResponse);
 };

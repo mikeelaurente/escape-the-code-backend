@@ -27,7 +27,7 @@ export const updateAvatarHandler = async (
     const result = await db
       .update(schema.users)
       .set({
-        photoUrl: avatar?.filename,
+        photoUrl: `/uploads/avatars/${avatar?.filename}`,
       })
       .where(eq(schema.users.id, userId));
 

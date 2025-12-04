@@ -27,7 +27,7 @@ export const updateBannerHandler = async (
     const result = await db
       .update(schema.users)
       .set({
-        bannerUrl: banner?.filename,
+        bannerUrl: `/uploads/banners/${banner?.filename}`,
       })
       .where(eq(schema.users.id, userId));
 

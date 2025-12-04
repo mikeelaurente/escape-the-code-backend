@@ -79,8 +79,6 @@ export const submitAnswerHandler = async (
     softenCpu: false,
   });
 
-  console.log('runnerResponse', runnerResponse);
-
   const passed =
     runnerResponse.status === 'ok' && runnerResponse.results.every((x) => x.ok);
 

@@ -248,6 +248,8 @@ Important Rules:
             completedAt: updatedAnswer?.completedAt,
             duration: updatedAnswer?.duration,
             status: challengeStatus,
+            rewardPoints: updatedAnswer?.rewardPoints,
+            creditPoints: updatedAnswer?.creditPoints,
           },
         },
       };
