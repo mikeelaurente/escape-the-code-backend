@@ -13,7 +13,15 @@ export const getUserStatsHandler = async (
   try {
     const userId = Number(req.params.id);
     const userRank = await getUserRankingFor(userId);
-    const nextSection = null;
+
+    // Get the first course to fetch next section
+    const firstCourse = await db.query.courses.findFirst({
+      orderBy: asc(schema.courses.id),
+    });
+
+    const nextSection = firstCourse
+      ? await getNextSectionFor(userId, firstCourse.id)
+      : null;
 
     const achievements = await db.query.userAchievements.findMany({
       where: eq(schema.userAchievements.userId, userId),
@@ -22,6 +30,7 @@ export const getUserStatsHandler = async (
         achievement: {
           columns: {
             icon: true,
+            coverImage: true,
             title: true,
             description: true,
             difficulty: true,

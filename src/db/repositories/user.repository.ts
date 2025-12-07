@@ -81,9 +81,9 @@ export const getUserRanking = async (
   let searchSql = sql`WHERE 1 = 1`;
   if (search.length > 0) {
     searchSql = sql`WHERE
-        email LIKE CONCAT('%', ${search}, '%')
-        OR first_name LIKE CONCAT('%', ${search}, '%')
-        OR last_name LIKE CONCAT('%', ${search}, '%')
+        y.email LIKE CONCAT('%', ${search}, '%')
+        OR y.firstName LIKE CONCAT('%', ${search}, '%')
+        OR y.lastName LIKE CONCAT('%', ${search}, '%')
     `;
   }
 
