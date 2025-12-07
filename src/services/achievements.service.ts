@@ -125,6 +125,78 @@ async function awardAchievementOnce(userId: number, achievementId: number) {
   return true;
 }
 
+// Award section achievements for a specific challenge; give credits; log credit tx.
+// Returns array of awarded section achievements
+export async function awardChallengeAchievements(
+  userId: number,
+  challengeId: number,
+): Promise<(typeof T.sectionAchievements.$inferSelect)[]> {
+  // Get all section achievements linked to this challenge
+  const challengeAchievements = await db.query.challengeAchievements.findMany({
+    where: eq(T.challengeAchievements.challengeId, challengeId),
+    with: {
+      sectionAchievement: true,
+    },
+  });
+
+  if (!challengeAchievements.length) return [];
+
+  const awardedAchievements: (typeof T.sectionAchievements.$inferSelect)[] = [];
+
+  for (const ca of challengeAchievements) {
+    const sectionAchievement = ca.sectionAchievement;
+    if (!sectionAchievement) continue;
+
+    // Check if already awarded
+    const existing = await db.query.userSectionAchievements.findFirst({
+      where: and(
+        eq(T.userSectionAchievements.userId, userId),
+        eq(
+          T.userSectionAchievements.sectionAchievementId,
+          sectionAchievement.id,
+        ),
+      ),
+    });
+
+    if (existing) continue;
+
+    // Award the section achievement
+    await db.insert(T.userSectionAchievements).values({
+      userId,
+      sectionAchievementId: sectionAchievement.id,
+      challengeId,
+      awardedAt: new Date(),
+    });
+
+    // Award credits if any
+    if (sectionAchievement.creditPoints > 0) {
+      await db.transaction(async (tx) => {
+        // increment wallet
+        await tx
+          .update(T.users)
+          .set({
+            credits: sql`${T.users.credits} + ${sectionAchievement.creditPoints}`,
+          })
+          .where(eq(T.users.id, userId));
+
+        // log transaction
+        await tx.insert(T.creditTransactions).values({
+          userId,
+          title: `Achievement: ${sectionAchievement.title}`,
+          type: 'in',
+          group: 'reward',
+          referenceId: sectionAchievement.id,
+          amount: sectionAchievement.creditPoints,
+        });
+      });
+    }
+
+    awardedAchievements.push(sectionAchievement);
+  }
+
+  return awardedAchievements;
+}
+
 // ───────────────────────────────────────────────────────────────────────────────
 // Rule evaluators (use ONLY your existing tables)
 // ───────────────────────────────────────────────────────────────────────────────

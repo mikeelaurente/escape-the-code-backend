@@ -8,6 +8,7 @@ import {
   varchar,
   json,
   text,
+  unique,
 } from 'drizzle-orm/mysql-core';
 
 import { createInsertSchema } from 'drizzle-zod';
@@ -126,6 +127,18 @@ export const userAchievements = mysqlTable('user_achievements', {
   awardedAt: datetime().notNull(),
 });
 
+export const userSectionAchievements = mysqlTable('user_section_achievements', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id')
+    .notNull()
+    .references(() => users.id),
+  sectionAchievementId: int('section_achievement_id')
+    .notNull()
+    .references(() => sectionAchievements.id),
+  challengeId: int('challenge_id').references(() => challenges.id),
+  awardedAt: datetime().notNull(),
+});
+
 export const courseProgress = mysqlTable('course_progress', {
   id: int('id').autoincrement().primaryKey(),
   userId: int('user_id').references(() => users.id),
@@ -179,6 +192,44 @@ export const sections = mysqlTable('sections', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
+
+// Section achievements - standalone achievements per section (not related to global achievements)
+export const sectionAchievements = mysqlTable('section_achievements', {
+  id: int('id').autoincrement().primaryKey(),
+  sectionId: int('section_id')
+    .notNull()
+    .references(() => sections.id),
+  code: varchar('code', { length: 64 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: varchar('description', { length: 1024 }).notNull(),
+  rewardPoints: int('reward_points').notNull().default(0),
+  creditPoints: int('credit_points').notNull().default(0),
+  coverImage: varchar('cover_image', { length: 255 }),
+  icon: varchar('icon', { length: 64 }).notNull().default('tabler:award'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+});
+
+// Junction table for linking section achievements to challenges
+export const challengeAchievements = mysqlTable(
+  'challenge_achievements',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    challengeId: int('challenge_id')
+      .notNull()
+      .references(() => challenges.id),
+    sectionAchievementId: int('section_achievement_id')
+      .notNull()
+      .references(() => sectionAchievements.id),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (c) => [
+    unique('ca_challenge_id_sa_id_unique').on(
+      c.challengeId,
+      c.sectionAchievementId,
+    ),
+  ],
+);
 
 export type ChallengeType = 'code' | 'multiple_choice';
 
@@ -327,7 +378,33 @@ export const sectionRelations = relations(sections, ({ one, many }) => ({
     references: [courseProgress.sectionId],
   }),
   challenges: many(challenges),
+  sectionAchievements: many(sectionAchievements),
 }));
+
+export const sectionAchievementRelations = relations(
+  sectionAchievements,
+  ({ one, many }) => ({
+    section: one(sections, {
+      fields: [sectionAchievements.sectionId],
+      references: [sections.id],
+    }),
+    challengeAchievements: many(challengeAchievements),
+  }),
+);
+
+export const challengeAchievementRelations = relations(
+  challengeAchievements,
+  ({ one }) => ({
+    challenge: one(challenges, {
+      fields: [challengeAchievements.challengeId],
+      references: [challenges.id],
+    }),
+    sectionAchievement: one(sectionAchievements, {
+      fields: [challengeAchievements.sectionAchievementId],
+      references: [sectionAchievements.id],
+    }),
+  }),
+);
 
 export const challengeRelations = relations(challenges, ({ one, many }) => ({
   section: one(sections, {
@@ -368,6 +445,24 @@ export const courseProgressRelations = relations(courseProgress, ({ one }) => ({
     references: [sections.id],
   }),
 }));
+
+export const userSectionAchievementRelations = relations(
+  userSectionAchievements,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userSectionAchievements.userId],
+      references: [users.id],
+    }),
+    sectionAchievement: one(sectionAchievements, {
+      fields: [userSectionAchievements.sectionAchievementId],
+      references: [sectionAchievements.id],
+    }),
+    challenge: one(challenges, {
+      fields: [userSectionAchievements.challengeId],
+      references: [challenges.id],
+    }),
+  }),
+);
 
 export type User = typeof users.$inferSelect;
 

@@ -2,18 +2,20 @@ import config from '../config/config';
 
 export function resolveImage(
   imageName: string,
-  type: 'avatar' | 'banner' | 'course' | 'achievement' | 'section' | 'chapter',
+  type:
+    | 'avatar'
+    | 'banner'
+    | 'course'
+    | 'achievement'
+    | 'section-achievement'
+    | 'section'
+    | 'chapter',
 ): string {
-  if (['chapter', 'section'].includes(type)) {
+  if (['chapter', 'section', 'section-achievement'].includes(type)) {
     type = 'course';
   }
-  console.log('Original image name:', imageName);
-  console.log('Image type:', type);
   imageName = imageName.replace(`/uploads/${type}s/`, '');
-  console.log(
-    'Resolved image:',
-    `${config.domainName}/uploads/${type}s/${imageName}`,
-  );
+  imageName = imageName.replace(/^\//, '');
 
   return `${config.domainName}/uploads/${type}s/${imageName}`;
 }
@@ -44,6 +46,15 @@ export const resolveAchievementImage = (imageName: string | 'default') => {
     return `${config.domainName}/uploads/default/default-achievement.png`;
   }
   return resolveImage(imageName, 'achievement');
+};
+
+export const resolveSectionAchievementImage = (
+  imageName: string | 'default',
+) => {
+  if (imageName == 'default') {
+    return `${config.domainName}/uploads/default/default-achievement.png`;
+  }
+  return resolveImage(imageName, 'section-achievement');
 };
 
 export const resolveAvatar = (imageName: string | 'default') => {

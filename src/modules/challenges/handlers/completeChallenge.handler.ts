@@ -7,7 +7,10 @@ import { generateFeedback, generateOllamaFeedback } from '../../../feedback';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { onChallengeCompleted } from '../../../services/achievements.service';
+import {
+  onChallengeCompleted,
+  awardChallengeAchievements,
+} from '../../../services/achievements.service';
 
 export const completeChallengeHandler = async (
   req: Request,
@@ -26,8 +29,8 @@ export const completeChallengeHandler = async (
     });
 
     // Function to send data
-    const sendEvent = (event: string, data: unknown) => {
-      res.write(`${event}: ${JSON.stringify(data)}\n\n`);
+    const sendEvent = (event: string, data: unknown, stringify = true) => {
+      res.write(`${event}: ${stringify ? JSON.stringify(data) : data}\n\n`);
     };
 
     const response = await db.transaction(async (tx) => {
@@ -256,22 +259,54 @@ Important Rules:
       };
     });
 
-    let achievements: (typeof schema.achievements.$inferSelect)[] = [];
+    let achievements: (
+      | typeof schema.achievements.$inferSelect
+      | typeof schema.sectionAchievements.$inferSelect
+    )[] = [];
     if (response.status === 'ok' && response?.data?.nextSection) {
       const answerId = response.data.answer.id;
       if (answerId) {
         const awardedAchievements = await onChallengeCompleted(answerId);
-        achievements = await db.query.achievements.findMany({
+        const globalAchievements = await db.query.achievements.findMany({
           where: inArray(schema.achievements.code, awardedAchievements),
         });
+        achievements.push(...globalAchievements);
       }
     }
 
-    sendEvent('end', {
-      data: {
-        ...response,
-        achievements: achievements,
+    // Award challenge-specific section achievements
+    if (response.status === 'ok') {
+      try {
+        const sectionAchievements = await awardChallengeAchievements(
+          userId,
+          challengeId,
+        );
+        achievements.push(...sectionAchievements);
+      } catch (error) {
+        console.error('Error awarding section achievements:', error);
+      }
+    }
+
+    const finalPayload = JSON.stringify(
+      {
+        data: {
+          ...response,
+          achievements,
+        },
       },
+      null,
+      2,
+    );
+
+    // split finalPayload into chunks of 2048 characters
+    const chunkSize = 2048;
+    for (let i = 0; i < finalPayload.length; i += chunkSize) {
+      const chunk = finalPayload.slice(i, i + chunkSize);
+      sendEvent('end:chunk', chunk, false);
+    }
+
+    sendEvent('end', {
+      data: 'complete',
     });
   } catch (e) {
     console.log('error', e);

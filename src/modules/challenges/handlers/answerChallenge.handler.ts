@@ -5,7 +5,10 @@ import { and, eq } from 'drizzle-orm';
 import * as challengesSchema from '../challenges.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
-import { onChallengeCompleted } from '../../../services/achievements.service';
+import {
+  onChallengeCompleted,
+  awardChallengeAchievements,
+} from '../../../services/achievements.service';
 import { getNextSectionFor } from '../../../db/repositories/story.repository';
 
 export const answerChallengeHandler = async (
@@ -218,6 +221,14 @@ export const answerChallengeHandler = async (
         console.error('Error checking achievements:', error);
       }
 
+      // Award challenge-specific section achievements
+      let achievements: (typeof schema.sectionAchievements.$inferSelect)[] = [];
+      try {
+        achievements = await awardChallengeAchievements(userId, challengeId);
+      } catch (error) {
+        console.error('Error awarding section achievements:', error);
+      }
+
       // Get next section
       const courseId = challengeWithDetails?.section?.chapter?.courseId;
       const nextSection = courseId
@@ -251,6 +262,7 @@ export const answerChallengeHandler = async (
           feedback,
           choices,
           acceptedAnswer,
+          achievements,
           nextSection: nextSection && {
             id: nextSection.id,
             chapterId: nextSection.chapterId,
