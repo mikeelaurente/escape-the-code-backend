@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import * as authSchema from '../auth.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
@@ -28,7 +28,10 @@ export const loginHandler = async (
     const { email, password } = validationResult.data;
 
     const user = await db.query.users.findFirst({
-      where: eq(schema.users.email, email),
+      where: and(
+        eq(schema.users.email, email),
+        eq(schema.users.status, 'active'),
+      ),
     });
 
     if (!user) {
