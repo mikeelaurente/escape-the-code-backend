@@ -149,19 +149,22 @@ export const answerChallengeHandler = async (
       .where(eq(schema.challengeAnswers.id, existingAnswer.id));
 
     // Create submission record
-    await db.insert(schema.challengeAnswerSubmissions).values({
-      userId,
-      challengeId,
-      challengeAnswerId: existingAnswer.id,
-      code: String(userAnswer),
-      result: isCorrect ? 'passed' : 'failed',
-      codeOutput: isCorrect ? 'Correct!' : 'Incorrect',
-      metadata: JSON.stringify({
-        userAnswer,
-        correctAnswer,
-        isCorrect,
-      }),
-    });
+    const [submissionId] = await db
+      .insert(schema.challengeAnswerSubmissions)
+      .values({
+        userId,
+        challengeId,
+        challengeAnswerId: existingAnswer.id,
+        code: String(userAnswer),
+        result: isCorrect ? 'passed' : 'failed',
+        codeOutput: isCorrect ? 'Correct!' : 'Incorrect',
+        metadata: JSON.stringify({
+          userAnswer,
+          correctAnswer,
+          isCorrect,
+        }),
+      })
+      .$returningId();
 
     if (isCorrect) {
       // Award credits and points
@@ -243,6 +246,14 @@ export const answerChallengeHandler = async (
         },
       });
 
+      // get the submission we just created
+      const sub = await db.query.challengeAnswerSubmissions.findFirst({
+        where: eq(schema.challengeAnswerSubmissions.id, submissionId!.id),
+      });
+
+      (acceptedAnswer as any).submission = sub;
+      (challenge as any).acceptedAnswer = acceptedAnswer;
+
       // Parse choices if available
       let choices = null;
       if (challenge.choices) {
@@ -261,6 +272,7 @@ export const answerChallengeHandler = async (
           creditPoints: challenge.creditPoints,
           feedback,
           choices,
+          challenge,
           acceptedAnswer,
           achievements,
           nextSection: nextSection && {
@@ -333,6 +345,14 @@ export const answerChallengeHandler = async (
         },
       });
 
+      // get the submission we just created
+      const sub = await db.query.challengeAnswerSubmissions.findFirst({
+        where: eq(schema.challengeAnswerSubmissions.id, submissionId!.id),
+      });
+
+      (completedAnswer as any).submission = sub;
+      (challenge as any).acceptedAnswer = completedAnswer;
+
       return res.json({
         status: 'ok',
         data: {
@@ -342,6 +362,7 @@ export const answerChallengeHandler = async (
           feedback,
           choices,
           completedAnswer,
+          challenge,
           nextSection: nextSection && {
             id: nextSection.id,
             chapterId: nextSection.chapterId,
