@@ -238,8 +238,6 @@ The backend exposes a JWT-secured REST API organized into feature modules.
 - Achievements
 - Transactions
 
-> Complete endpoint documentation can be provided separately (OpenAPI or API.md).
-
 ---
 
 ## Getting Started
