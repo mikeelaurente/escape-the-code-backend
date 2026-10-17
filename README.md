@@ -303,5 +303,5 @@ http://localhost:3000
 
 **Mikee Laurente**
 
-- Live Demo: https://escapethecode.cloud
+- Frontend Link: https://github.com/mikeelaurente/escape-the-code-frontend
 - LinkedIn: https://www.linkedin.com/in/mikee-laurente-0773313a6/
