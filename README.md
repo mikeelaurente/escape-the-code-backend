@@ -2,8 +2,6 @@
 
 A gamified learning platform that helps beginners learn JavaScript through interactive lessons, coding challenges, automated grading, and AI-generated feedback.
 
-**Live Demo:** https://escapethecode.cloud
-
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-runtime-339933?logo=node.js&logoColor=white)
@@ -303,5 +301,5 @@ http://localhost:3000
 
 **Mikee Laurente**
 
-- Live Demo: https://escapethecode.cloud
+- Frontend Link: https://github.com/mikeelaurente/escape-the-code-frontend
 - LinkedIn: https://www.linkedin.com/in/mikee-laurente-0773313a6/
