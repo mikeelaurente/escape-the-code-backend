@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   tinyint,
   datetime,
@@ -50,17 +50,33 @@ export const hintUsages = mysqlTable('hint_usages', {
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
-export const creditTransactions = mysqlTable('credit_transactions', {
-  id: int('id').autoincrement().primaryKey(),
-  userId: int('user_id').references(() => users.id),
-  title: varchar({ length: 255 }).notNull(),
-  type: varchar({ length: 30 }).notNull().$type<'in' | 'out'>(),
-  referenceId: int('reference_id'),
-  group: varchar({ length: 30 }).$type<'hint' | 'reward'>(),
-  amount: int().notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
-});
+export const creditTransactions = mysqlTable(
+  'credit_transactions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    userId: int('user_id').references(() => users.id),
+    title: varchar({ length: 255 }).notNull(),
+    type: varchar({ length: 30 }).notNull().$type<'in' | 'out'>(),
+    referenceId: int('reference_id'),
+    group: varchar({ length: 30 }).$type<'hint' | 'reward'>(),
+    rewardEventKey: varchar('reward_event_key', { length: 191 }),
+    rewardIdempotencyKey: varchar('reward_idempotency_key', {
+      length: 191,
+    }).generatedAlwaysAs(
+      sql`(CASE WHEN \`group\` = 'reward' AND \`type\` = 'in' THEN \`reward_event_key\` ELSE NULL END)`,
+      { mode: 'stored' },
+    ),
+    amount: int().notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  },
+  (table) => [
+    unique('credit_reward_reference_unique').on(
+      table.userId,
+      table.rewardIdempotencyKey,
+    ),
+  ],
+);
 
 export type AchievementRule =
   | {

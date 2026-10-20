@@ -53,6 +53,7 @@ async function main() {
         userId: currentUser?.id,
         type: 'in',
         group: 'reward',
+        rewardEventKey: `seed:initial-balance`,
       });
 
       await updateUserBalance(Number(currentUser?.id), tx);

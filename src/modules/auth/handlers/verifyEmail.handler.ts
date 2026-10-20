@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import * as authSchema from '../auth.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
@@ -47,13 +47,21 @@ export const verificationConfirmHandler = async (
       })
       .where(eq(schema.users.id, user.id));
 
-    await db.insert(schema.creditTransactions).values({
-      title: 'Initial Balance',
-      amount: 50,
-      userId: user.id,
-      type: 'in',
-      group: 'reward',
-    });
+    await db
+      .insert(schema.creditTransactions)
+      .values({
+        title: 'Initial Balance',
+        amount: 50,
+        userId: user.id,
+        type: 'in',
+        group: 'reward',
+        rewardEventKey: 'email-verification',
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          rewardEventKey: sql`${schema.creditTransactions.rewardEventKey}`,
+        },
+      });
 
     await updateUserBalance(user.id);
 

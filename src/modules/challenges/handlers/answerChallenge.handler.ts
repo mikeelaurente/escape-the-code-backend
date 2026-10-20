@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../../../db';
 import * as schema from '../../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import * as challengesSchema from '../challenges.schema';
 import { extractValidationErrors } from '../../../helpers/validation.helper';
 import { updateUserBalance } from '../../../db/repositories/user.repository';
@@ -168,14 +168,23 @@ export const answerChallengeHandler = async (
 
     if (isCorrect) {
       // Award credits and points
-      await db.insert(schema.creditTransactions).values({
-        amount: Number(challenge.creditPoints),
-        title: 'Reward: ' + challenge.title,
-        type: 'in',
-        group: 'reward',
-        referenceId: existingAnswer.id,
-        userId: userId,
-      });
+      const rewardEventKey = `challenge-answer:${existingAnswer.id}`;
+      await db
+        .insert(schema.creditTransactions)
+        .values({
+          amount: Number(challenge.creditPoints),
+          title: 'Reward: ' + challenge.title,
+          type: 'in',
+          group: 'reward',
+          referenceId: existingAnswer.id,
+          rewardEventKey,
+          userId: userId,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            rewardEventKey: sql`${schema.creditTransactions.rewardEventKey}`,
+          },
+        });
 
       await updateUserBalance(userId);
 

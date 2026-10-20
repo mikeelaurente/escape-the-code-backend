@@ -118,6 +118,7 @@ async function awardAchievementOnce(userId: number, achievementId: number) {
         type: 'in',
         group: 'reward',
         referenceId: achievementId,
+        rewardEventKey: `achievement:${achievementId}`,
         amount: ach.creditPoints,
       });
     });
@@ -186,6 +187,7 @@ export async function awardChallengeAchievements(
           type: 'in',
           group: 'reward',
           referenceId: sectionAchievement.id,
+          rewardEventKey: `section-achievement:${sectionAchievement.id}`,
           amount: sectionAchievement.creditPoints,
         });
       });

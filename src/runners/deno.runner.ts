@@ -1,4 +1,8 @@
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Script } from 'node:vm';
 
 /* ---------- Types ---------- */
 
@@ -47,343 +51,387 @@ export interface RunOpts {
 /* ---------- Config ---------- */
 
 const DENO_BIN = process.env.DENO_BIN || 'deno';
+const RESULT_MARKER = '__SANDBOX_RESULT__';
+const SUBMITTED_FILENAME = 'submitted_code.js';
+const MAX_RESULT_PAYLOAD_BYTES = 512 * 1024;
+const MAX_STDOUT_BYTES = 512 * 1024;
+const MAX_STDERR_BYTES = 512 * 1024;
+const USER_FN_BODY_PREFIX = '"use strict";\n';
+const USER_FN_BODY_PREFIX_LINES = USER_FN_BODY_PREFIX.split('\n').length - 1;
 
 /**
  * HARNESS_BATCH
- * Runs inside the Deno child process (via `deno eval`).
+ * Runs inside the Deno child process (via `deno run`).
  * - Reads base64-encoded `code` and JSON `tests` from argv
- * - Defines a callable function on globalThis (__USER_FN__)
- * - Executes once per test, capturing logs and assertions
- * - Emits exactly ONE JSON object to stdout
+ * - Executes user code inside a Worker with `permissions: "none"`
+ * - Emits exactly ONE marker-prefixed JSON payload to stdout
+ *
+ * Security note:
+ * - This is a hardened runner with strict Deno permission denial and worker isolation,
+ *   but it is still process-level isolation on the same host.
+ * - Treat it as defense-in-depth, not as a full multi-tenant security boundary.
  */
 export const HARNESS_BATCH = `
-(function main() {
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Utilities
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  let userAnswer = undefined;
-
-  function print(...args) {
-    return console.log(...args);
-  }
-
-  function checkAnswer(answer) {
-    userAnswer = answer;
-  }
-
+(async function main() {
   function b64decode(b64) {
     const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     return new TextDecoder().decode(bin);
   }
 
-  function escapeRegex(s) {
-    return String(s).replace(/[.*+?^\${}()|[\\]\\\\]/g, "\\\\$&");
+  const [codeB64, testsB64, resultToken, timeoutMsRaw] = Deno.args;
+  const code = b64decode(codeB64 || "");
+  const tests = JSON.parse(b64decode(testsB64 || "W10="));
+  const workerTimeoutMs = Math.max(100, Number(timeoutMsRaw || 0) || 0);
+
+  const workerToken = crypto.randomUUID();
+  const workerSource = \`
+const RUN_TOKEN = \${JSON.stringify(workerToken)};
+const FILENAME = "submitted_code.js";
+const MAX_TESTS = 64;
+const MAX_LOGS_PER_TEST = 200;
+const MAX_STRING = 4000;
+const MAX_ARRAY = 100;
+const MAX_OBJECT_KEYS = 50;
+const MAX_DEPTH = 8;
+
+function deepClone(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+function isNumber(x) { return typeof x === "number" && !Number.isNaN(x); }
+function eqNumber(a, b, eps) {
+  if (Object.is(a, b)) return true;
+  if (Number.isNaN(a) && Number.isNaN(b)) return true;
+  if (typeof eps === "number") return Math.abs(a - b) <= Math.max(0, eps);
+  return a === b;
+}
+function deepEqualWithDiff(a, b, eps, path) {
+  path = path || "$";
+  if (a === b) return { equal: true };
+
+  if (isNumber(a) && isNumber(b)) {
+    return eqNumber(a, b, eps) ? { equal: true } : { equal: false, path, expected: b, actual: a };
   }
 
-  // Deep equality with first-diff reporting and optional numeric epsilon
-  function isNumber(x) { return typeof x === "number" && !Number.isNaN(x); }
-  function eqNumber(a, b, eps) {
-    if (Object.is(a, b)) return true;                     // handles -0
-    if (Number.isNaN(a) && Number.isNaN(b)) return true;
-    if (typeof eps === "number") return Math.abs(a - b) <= Math.max(0, eps);
-    return a === b;
+  if (a === null || b === null || typeof a !== typeof b) {
+    return { equal: false, path, expected: b, actual: a };
   }
-  function deepEqualWithDiff(a, b, eps, path) {
-    path = path || "$";
 
-    // Fast path (strict equal)
-    if (a === b) return { equal: true };
-
-    // Numbers with epsilon
-    if (isNumber(a) && isNumber(b)) {
-      return eqNumber(a, b, eps) ? { equal: true } : { equal: false, path, expected: b, actual: a };
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) {
+      return { equal: false, path: path + ".length", expected: b.length, actual: a.length };
     }
-
-    // Type/null checks
-    if (a === null || b === null || typeof a !== typeof b) {
-      return { equal: false, path, expected: b, actual: a };
+    for (let i = 0; i < a.length; i++) {
+      const r = deepEqualWithDiff(a[i], b[i], eps, path + "[" + i + "]");
+      if (!r.equal) return r;
     }
+    return { equal: true };
+  }
 
-    // Arrays
-    if (Array.isArray(a) && Array.isArray(b)) {
-      if (a.length !== b.length) {
-        return { equal: false, path: path + ".length", expected: b.length, actual: a.length };
-      }
-      for (let i = 0; i < a.length; i++) {
-        const r = deepEqualWithDiff(a[i], b[i], eps, path + "[" + i + "]");
-        if (!r.equal) return r;
-      }
-      return { equal: true };
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const ak = Object.keys(a).sort();
+    const bk = Object.keys(b).sort();
+    if (ak.length !== bk.length) {
+      return { equal: false, path: path + ".keys", expected: bk, actual: ak };
     }
-
-    // Plain objects (compare sorted keys)
-    if (a && b && typeof a === "object" && typeof b === "object") {
-      const ak = Object.keys(a).sort();
-      const bk = Object.keys(b).sort();
-      if (ak.length !== bk.length) {
+    for (let i = 0; i < ak.length; i++) {
+      if (ak[i] !== bk[i]) {
         return { equal: false, path: path + ".keys", expected: bk, actual: ak };
       }
-      for (let i = 0; i < ak.length; i++) {
-        if (ak[i] !== bk[i]) {
-          return { equal: false, path: path + ".keys", expected: bk, actual: ak };
-        }
-      }
-      for (const key of ak) {
-        const r = deepEqualWithDiff(a[key], b[key], eps, path + "." + key);
-        if (!r.equal) return r;
-      }
-      return { equal: true };
     }
-
-    // Fallback strict compare for other types
-    return { equal: Object.is(a, b), path, expected: b, actual: a };
+    for (const key of ak) {
+      const r = deepEqualWithDiff(a[key], b[key], eps, path + "." + key);
+      if (!r.equal) return r;
+    }
+    return { equal: true };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Inputs
-  // ─────────────────────────────────────────────────────────────────────────────
+  return { equal: Object.is(a, b), path, expected: b, actual: a };
+}
 
-  // argv: [codeB64, testsB64, virtualFilename?]
-  const [codeB64, testsB64, virtualName] = Deno.args;
+function buildUserFn(source) {
+  const wrapped = ['"use strict";', source, '//# sourceURL=' + FILENAME].join("\\\\n");
+  return new Function(
+    "input",
+    "checkAnswer",
+    "print",
+    "console",
+    wrapped,
+  );
+}
 
-  const code  = b64decode(codeB64 || "");
-  const tests = JSON.parse(b64decode(testsB64 || "W10=")); // each: { input, expect?, epsilon? }
-  const fname = virtualName || "submitted_code.js";
+function toSerializable(value, seen, depth) {
+  if (value === null || value === undefined) return null;
+  if (depth > MAX_DEPTH) return "[MaxDepth]";
+  if (typeof value === "string") {
+    return value.length > MAX_STRING ? value.slice(0, MAX_STRING) + "...(truncated)" : value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return String(value);
+    return value;
+  }
+  if (typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString() + "n";
+  if (typeof value === "symbol") return value.toString();
+  if (typeof value === "function") return "[Function]";
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Console capture (do NOT echo to real stdout)
-  // ─────────────────────────────────────────────────────────────────────────────
-  const logs = [];
-  ["log", "info", "warn", "error"].forEach(level => {
-    console[level] = (...args) => {
-      try { logs.push({ level, args }); } catch {}
-    };
-  });
+  if (seen.has(value)) return "[Circular]";
+  seen.add(value);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Compile user function on globalThis with sourceURL
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Keep this simple so startLineInEval stays stable:
-  //   1: globalThis.__USER_FN__ = function __USER_FN__(input)
-  //   2: {
-  //   3:   "use strict";
-  //   4+:  ... user code ...
-  //      }
-  //      //# sourceURL=<fname>
-  const PRE   = 'globalThis.__USER_FN__ = function __USER_FN__(input)\\n{\\n\\"use strict\\";\\n';
-  const POST  = '\\n};\\n//# sourceURL=' + fname;
-  const START = PRE.split("\\n").length;    // first user-code line inside eval file
+  if (Array.isArray(value)) {
+    const out = [];
+    const length = Math.min(value.length, MAX_ARRAY);
+    for (let i = 0; i < length; i++) {
+      out.push(toSerializable(value[i], seen, depth + 1));
+    }
+    if (value.length > MAX_ARRAY) out.push("...(truncated)");
+    return out;
+  }
 
-  let fn = null;
-  let syntaxError = null;
+  if (typeof value === "object") {
+    const out = {};
+    const keys = Object.keys(value).slice(0, MAX_OBJECT_KEYS);
+    for (const key of keys) {
+      out[key] = toSerializable(value[key], seen, depth + 1);
+    }
+    if (Object.keys(value).length > MAX_OBJECT_KEYS) {
+      out.__truncated__ = true;
+    }
+    return out;
+  }
 
   try {
-    eval(PRE + code + POST);
-    fn = globalThis.__USER_FN__;
-  } catch (e) {
-    syntaxError = (e?.name || "SyntaxError") + ": " + (e?.message || String(e));
+    return String(value);
+  } catch (_err) {
+    return "[Unserializable]";
   }
+}
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Test runner
-  // ─────────────────────────────────────────────────────────────────────────────
+function normalizePrinted(logs, base) {
+  return logs
+    .slice(base)
+    .filter((l) => l.level === "log" || l.level === "info")
+    .map((l) => l.args.join(""))
+    .join("");
+}
 
-  function runTest(index) {
-    const t0   = Date.now();
-    const base = logs.length;
-    const test = tests[index] || {};
-    const eps  = (typeof test.epsilon === "number") ? test.epsilon : undefined;
+async function runOne(fn, test, index) {
+  const logs = [];
+  let userAnswer = undefined;
+  const t0 = Date.now();
+  const eps = typeof test?.epsilon === "number" ? test.epsilon : undefined;
 
-    return new Promise(resolve => {
-      try {
-        let out = fn(test.input);
-        if (out === undefined && userAnswer !== undefined) {
-          // If user called checkAnswer(), use that instead of return value
-          out = userAnswer;
-          userAnswer = undefined; // reset for next test
-        }
+  const safeConsole = Object.freeze({
+    log: (...args) => {
+      if (logs.length < MAX_LOGS_PER_TEST) logs.push({ level: "log", args: args.map((x) => toSerializable(x, new WeakSet(), 0)) });
+    },
+    info: (...args) => {
+      if (logs.length < MAX_LOGS_PER_TEST) logs.push({ level: "info", args: args.map((x) => toSerializable(x, new WeakSet(), 0)) });
+    },
+    warn: (...args) => {
+      if (logs.length < MAX_LOGS_PER_TEST) logs.push({ level: "warn", args: args.map((x) => toSerializable(x, new WeakSet(), 0)) });
+    },
+    error: (...args) => {
+      if (logs.length < MAX_LOGS_PER_TEST) logs.push({ level: "error", args: args.map((x) => toSerializable(x, new WeakSet(), 0)) });
+    },
+  });
 
-        const onOk = (value) => {
-          // If expect is provided, assertion decides ok-ness
-          let passed = true;
-          let diff;
-
-          if ("expect" in test) {
-            // Optional: mark missing return as failure
-            if (typeof value === "undefined") {
-              passed = false;
-              diff = { path: "$", expected: test.expect, actual: undefined, reason: "No return value" };
-            } else {
-              const r = deepEqualWithDiff(value, test.expect, eps, "$");
-              passed = !!r.equal;
-              if (!passed) diff = { path: r.path, expected: r.expected, actual: r.actual };
-            }
-          }
-
-          if ("expect_print" in test) {
-            let printed = logs.slice(base).filter(l => l.level === "log" || l.level === "info").map(l => l.args.join('')).join('');
-            try {
-              const expect_print_value = JSON.parse(test.expect_print);
-              test.expect_print = expect_print_value;
-            } catch(e) {
-            }
-            if (typeof test.expect_print === 'number') {
-              printed = Number(printed);
-            }
-            if (typeof test.expect_print === 'boolean') {
-              if (typeof printed === 'string') {
-                printed = printed === 'true' ? true : false;
-              }
-            }
-            if (typeof test.expect_print === 'object' && Array.isArray(test.expect_print)) {
-                printed = logs.slice(base).filter(l => l.level === "log" || l.level === "info").map(l => l.args.flat()).flat();
-                const r = deepEqualWithDiff(printed, test.expect_print, eps, "$");
-                passed = !!r.equal;
-                if (!passed) diff = { path: r.path, expected: r.expected, actual: r.actual };
-            } else {
-              if (printed !== test.expect_print) {
-                  passed = false;
-                  diff = { path: "print", expected: test.expect_print, actual: printed };
-              } else {
-                  passed = true;
-              }
-            }
-                
-        }
-
-          resolve({
-            index,
-            ok: passed,
-            result: value,
-            assert: ("expect" in test) ? { passed, expected: test.expect, diff } : undefined,
-            assert_print: ("expect_print" in test) ? { passed, expected: test.expect_print, diff } : undefined,
-            logs: logs.slice(base),
-            ms: Date.now() - t0
-          });
-        };
-
-        const onErr = (err) => {
-          resolve({
-            index,
-            ok: false,
-            error: (err?.name || "Error") + ": " + (err?.message || String(err)),
-            logs: logs.slice(base),
-            ms: Date.now() - t0
-          });
-        };
-
-        if (out && typeof out === "object" && typeof out.then === "function") {
-          out.then(onOk).catch(onErr);
-        } else {
-          onOk(out);
-        }
-      } catch (err) {
-        resolve({
-          index,
-          ok: false,
-          error: (err?.name || "Error") + ": " + (err?.message || String(err)),
-          logs: logs.slice(base),
-          ms: Date.now() - t0
-        });
-      }
-    });
-  }
-
-  function runAll() {
-    if (syntaxError) {
-      // Report syntax error for every test
-      return Promise.resolve(
-        tests.map((_, i) => ({
-          index: i,
-          ok: false,
-          errorType: "syntax",
-          error: syntaxError,
-          logs: [],
-          ms: 0
-        }))
-      );
+  const print = (...args) => {
+    if (logs.length < MAX_LOGS_PER_TEST) {
+      logs.push({ level: "log", args: args.map((x) => toSerializable(x, new WeakSet(), 0)) });
     }
-    return Promise.all(tests.map((_, i) => runTest(i)));
-  }
+    return undefined;
+  };
 
-  function runCode() {
-    if (syntaxError) {
-      // Report syntax error for every test
-      return Promise.resolve({
-          ok: false,
-          errorType: "syntax",
-          error: syntaxError,
-          logs: [],
-          ms: 0
-        });
+  const checkAnswer = (answer) => {
+    userAnswer = answer;
+  };
+
+  const input = "input" in (test || {}) ? deepClone(test.input) : undefined;
+  const expect = "expect" in (test || {}) ? deepClone(test.expect) : undefined;
+  const expectPrintRaw = "expect_print" in (test || {}) ? test.expect_print : undefined;
+  const base = logs.length;
+
+  try {
+    let out = fn(input, checkAnswer, print, safeConsole);
+    if (out && typeof out === "object" && typeof out.then === "function") {
+      out = await out;
     }
-    
-    const t0   = Date.now();
-    const base = logs.length;
 
-    return new Promise(resolve => {
-      try {
-        let out = fn();
+    if (typeof out === "undefined" && userAnswer !== undefined) {
+      out = userAnswer;
+    }
 
-        const onOk = (value) => {
-          resolve({
-            ok: true,
-            result: value,
-            logs: logs.slice(base),
-            ms: Date.now() - t0
-          });
-        };
+    let passed = true;
+    let diff;
 
-        const onErr = (err) => {
-          resolve({
-            ok: false,
-            error: (err?.name || "Error") + ": " + (err?.message || String(err)),
-            logs: logs.slice(base),
-            ms: Date.now() - t0
-          });
-        };
-
-        if (out && typeof out === "object" && typeof out.then === "function") {
-          out.then(onOk).catch(onErr);
-        } else {
-          onOk(out);
+    if ("expect" in (test || {})) {
+      if (typeof out === "undefined") {
+        passed = false;
+        diff = { path: "$", expected: expect, actual: undefined, reason: "No return value" };
+      } else {
+        const r = deepEqualWithDiff(out, expect, eps, "$");
+        passed = !!r.equal;
+        if (!passed) {
+          diff = { path: r.path, expected: r.expected, actual: r.actual };
         }
-      } catch (err) {
-        resolve({
-          ok: false,
-          error: (err?.name || "Error") + ": " + (err?.message || String(err)),
-          logs: logs.slice(base),
-          ms: Date.now() - t0
-        });
       }
-    });
+    }
+
+    if ("expect_print" in (test || {})) {
+      let printed = normalizePrinted(logs, base);
+      let expectPrint = expectPrintRaw;
+      try {
+        expectPrint = JSON.parse(expectPrintRaw);
+      } catch (_err) {}
+
+      if (typeof expectPrint === "number") {
+        printed = Number(printed);
+      }
+      if (typeof expectPrint === "boolean" && typeof printed === "string") {
+        printed = printed === "true";
+      }
+      if (typeof expectPrint === "object" && Array.isArray(expectPrint)) {
+        printed = logs
+          .slice(base)
+          .filter((l) => l.level === "log" || l.level === "info")
+          .map((l) => l.args.flat())
+          .flat();
+      }
+
+      const r = deepEqualWithDiff(printed, expectPrint, eps, "$");
+      passed = passed && !!r.equal;
+      if (!r.equal) {
+        diff = { path: r.path, expected: r.expected, actual: r.actual };
+      }
+    }
+
+    return {
+      index,
+      ok: passed,
+      result: toSerializable(out, new WeakSet(), 0),
+      logs,
+      ms: Date.now() - t0,
+      assert: "expect" in (test || {}) ? toSerializable({ passed, expected: expect, diff }, new WeakSet(), 0) : undefined,
+      assert_print: "expect_print" in (test || {}) ? toSerializable({ passed, expected: expectPrintRaw, diff }, new WeakSet(), 0) : undefined,
+    };
+  } catch (err) {
+    return {
+      index,
+      ok: false,
+      error: (err?.name || "Error") + ": " + (err?.message || String(err)),
+      logs,
+      ms: Date.now() - t0,
+    };
+  }
+}
+
+self.onmessage = async (event) => {
+  const trustedPostMessage = self.postMessage.bind(self);
+  const payload = event?.data || {};
+  if (payload.token !== RUN_TOKEN) {
+    return;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Emit a single JSON payload
-  // ─────────────────────────────────────────────────────────────────────────────
+  try {
+    const fn = buildUserFn(payload.code || "");
+    const tests = Array.isArray(payload.tests) ? payload.tests.slice(0, MAX_TESTS) : [];
+    const executionTests = tests.length === 0 ? [{}] : tests;
+    const results = [];
+    for (let i = 0; i < executionTests.length; i++) {
+      const result = await runOne(fn, executionTests[i], i);
+      results.push(toSerializable(result, new WeakSet(), 0));
+    }
 
-  if (!tests || tests.length === 0) {
-    runCode()
-      .then(results => {
-        const enc = new TextEncoder();
-        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: true, results: [results] })));
-      })
-      .catch(err => {
-        const enc = new TextEncoder();
-        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: false, error: "harness_failure", detail: String(err) })));
-      });
-  } else {
-    runAll()
-      .then(results => {
-        const enc = new TextEncoder();
-        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: true, results })));
-      })
-      .catch(err => {
-        const enc = new TextEncoder();
-        return Deno.stdout.write(enc.encode(JSON.stringify({ ok: false, error: "harness_failure", detail: String(err) })));
-      });
+    trustedPostMessage(toSerializable({ token: RUN_TOKEN, ok: true, results }, new WeakSet(), 0));
+  } catch (err) {
+    const syntaxError = (err?.name || "SyntaxError") + ": " + (err?.message || String(err));
+    const tests = Array.isArray(payload.tests) ? payload.tests : [];
+    const total = tests.length === 0 ? 1 : tests.length;
+    const results = Array.from({ length: total }, (_x, i) => ({
+      index: i,
+      ok: false,
+      errorType: "syntax",
+      error: syntaxError,
+      logs: [],
+      ms: 0,
+    }));
+    trustedPostMessage(toSerializable({ token: RUN_TOKEN, ok: true, results }, new WeakSet(), 0));
+  }
+};
+\`;
+
+  const workerUrl = URL.createObjectURL(
+    new Blob([workerSource], { type: 'application/javascript' }),
+  );
+  const worker = new Worker(workerUrl, {
+    type: 'module',
+    deno: { permissions: 'none' },
+  });
+
+  try {
+    const response = await new Promise((resolve) => {
+      const workerWaitTimer = workerTimeoutMs
+        ? setTimeout(() => {
+            worker.terminate();
+            resolve({
+              ok: false,
+              error: 'worker_timeout',
+              detail: 'worker execution exceeded timeout budget',
+            });
+          }, workerTimeoutMs)
+        : null;
+
+      const finish = (value) => {
+        if (workerWaitTimer) {
+          clearTimeout(workerWaitTimer);
+        }
+        resolve(value);
+      };
+
+      worker.onmessage = (event) => {
+        const data = event?.data;
+        if (!data || data.token !== workerToken) {
+          return;
+        }
+        finish(data);
+      };
+      worker.onerror = (event) => {
+        finish({
+          ok: false,
+          error: 'harness_failure',
+          detail: event?.message || 'worker runtime failure',
+        });
+      };
+      worker.onmessageerror = () => {
+        finish({
+          ok: false,
+          error: 'worker_message_error',
+          detail: 'worker emitted a malformed message',
+        });
+      };
+      worker.postMessage({ token: workerToken, code, tests });
+    });
+
+    const payload = JSON.stringify(response);
+    await Deno.stdout.write(
+      new TextEncoder().encode((resultToken || '') + payload),
+    );
+  } catch (err) {
+    const payload = JSON.stringify({
+      ok: false,
+      error: 'harness_failure',
+      detail: String(err),
+    });
+    await Deno.stdout.write(
+      new TextEncoder().encode((resultToken || '') + payload),
+    );
+  } finally {
+    worker.terminate();
+    URL.revokeObjectURL(workerUrl);
   }
 })();
 `;
@@ -391,6 +439,35 @@ export const HARNESS_BATCH = `
 /* ---------- Helpers ---------- */
 
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
+
+function buildErrorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    const stack = error.stack ? `\n${error.stack}` : '';
+    return `${error.name}: ${error.message}${stack}`;
+  }
+  return String(error);
+}
+
+function validateSyntaxWithoutExecution(code: string) {
+  try {
+    const wrappedSource = [
+      'globalThis.__USER_FN__ = function __USER_FN__(input, checkAnswer, print, console) {',
+      USER_FN_BODY_PREFIX.trimEnd(),
+      code,
+      `\n//# sourceURL=${SUBMITTED_FILENAME}`,
+      '};',
+    ].join('\n');
+    new Script(wrappedSource, {
+      filename: SUBMITTED_FILENAME,
+    });
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      detail: buildErrorDetail(error),
+    };
+  }
+}
 
 /** Detect common V8/Deno OOM patterns from stderr/stdout */
 function looksLikeOom(text: string): boolean {
@@ -403,7 +480,6 @@ function looksLikeOom(text: string): boolean {
 /** Best-effort: lower priority & pin to 1 core (does not hard-cap CPU). */
 function softenCpuOnWindows(pid: number) {
   try {
-    // Fire & forget PowerShell to adjust the child
     spawn(
       'powershell.exe',
       [
@@ -411,13 +487,28 @@ function softenCpuOnWindows(pid: number) {
         '-NonInteractive',
         '-Command',
         `$p = Get-Process -Id ${pid}; ` +
-          `$p.PriorityClass = 'BelowNormal'; ` + // or 'Idle'
-          `$p.ProcessorAffinity = 1`, // 1 = CPU0 only
+          `$p.PriorityClass = 'BelowNormal'; ` +
+          `$p.ProcessorAffinity = 1`,
       ],
       { windowsHide: true, stdio: 'ignore' },
     );
   } catch {
     /* ignore */
+  }
+}
+
+async function withHarnessFile<T>(
+  cb: (params: { harnessPath: string; resultToken: string }) => Promise<T>,
+): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), 'etc-deno-runner-'));
+  const harnessPath = join(dir, 'sandbox_harness.mjs');
+  const resultToken = `${RESULT_MARKER}${crypto.randomUUID()}::`;
+
+  try {
+    await writeFile(harnessPath, HARNESS_BATCH, 'utf8');
+    return await cb({ harnessPath, resultToken });
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -430,52 +521,54 @@ export async function runWithDenoWindows({
   heapMb = 256,
   softenCpu = false,
 }: RunOpts): Promise<SandboxRunResult> {
-  const syntaxCheckResult = await spawnChild({
-    args: ['eval', code],
-    opts: { softenCpu: false, timeoutMs: 150 },
-  });
+  const syntaxCheckResult = validateSyntaxWithoutExecution(code);
+  if (!syntaxCheckResult.ok) {
+    return {
+      status: 'parse_error',
+      ...extractSyntaxErrorDetails(code, syntaxCheckResult.detail),
+    };
+  }
 
   const codeB64 = b64(code);
   const testsB64 = b64(JSON.stringify(tests ? tests : []));
+  const workerTimeoutMs = Math.max(100, timeoutMs - 250);
 
-  const args = [
-    'eval',
-    HARNESS_BATCH,
-    codeB64,
-    testsB64,
-    '--no-remote',
-    // V8 heap cap (affects JS heap, not total RSS)
-    `--v8-flags=--max-old-space-size=${Math.max(64, Math.floor(heapMb))}`,
-    // sandbox
-    '--',
-    '--deny-env',
-    '--deny-net',
-    '--deny-read',
-    '--deny-write',
-    '--deny-run',
-    '--deny-ffi',
-  ];
+  return await withHarnessFile(async ({ harnessPath, resultToken }) => {
+    const args = [
+      'run',
+      '--quiet',
+      '--no-config',
+      '--no-prompt',
+      '--no-remote',
+      '--no-npm',
+      '--unstable-worker-options',
+      `--allow-read=${harnessPath}`,
+      '--deny-write',
+      '--deny-net',
+      '--deny-env',
+      '--deny-run',
+      '--deny-ffi',
+      '--deny-sys',
+      '--deny-import',
+      `--v8-flags=--max-old-space-size=${Math.max(64, Math.floor(heapMb))}`,
+      harnessPath,
+      codeB64,
+      testsB64,
+      resultToken,
+      String(workerTimeoutMs),
+    ];
 
-  const userCodeResult = await spawnChild({
-    args,
-    opts: { softenCpu, timeoutMs },
+    return await spawnChild({
+      args,
+      resultToken,
+      opts: { softenCpu, timeoutMs },
+    });
   });
-
-  if (
-    syntaxCheckResult.status === 'parse_error' &&
-    userCodeResult.status === 'ok' &&
-    userCodeResult.results.every((r) => r.errorType === 'syntax')
-  ) {
-    return {
-      status: 'parse_error',
-      ...extractSyntaxErrorDetails(code, syntaxCheckResult.detail || ''),
-    };
-  }
-  return userCodeResult;
 }
 
 async function spawnChild(params: {
   args: string[];
+  resultToken: string;
   opts: {
     softenCpu: boolean;
     timeoutMs: number;
@@ -483,6 +576,7 @@ async function spawnChild(params: {
 }) {
   const {
     args,
+    resultToken,
     opts: { softenCpu, timeoutMs },
   } = params;
 
@@ -492,113 +586,177 @@ async function spawnChild(params: {
   });
   if (softenCpu) softenCpuOnWindows(child.pid!);
 
-  let stdout = '',
-    stderr = '';
+  let stdout = '';
+  let stderr = '';
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (d: string) => (stdout += d));
-  child.stderr.on('data', (d: string) => (stderr += d));
+  let killedByOutputCap = false;
+  child.stdout.on('data', (d: string) => {
+    stdout += d;
+    if (stdout.length > MAX_STDOUT_BYTES) {
+      killedByOutputCap = true;
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+  child.stderr.on('data', (d: string) => {
+    stderr += d;
+    if (stderr.length > MAX_STDERR_BYTES) {
+      killedByOutputCap = true;
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* ignore */
+      }
+    }
+  });
 
   let killedByTimeout = false;
   const killTimer = setTimeout(() => {
     killedByTimeout = true;
     try {
       child.kill('SIGKILL');
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }, timeoutMs + 50);
 
   return await new Promise<SandboxRunResult>((resolve) => {
-    child.on(
-      'close',
-      (_code: number | null, _signal: NodeJS.Signals | null) => {
-        clearTimeout(killTimer);
+    child.on('close', (_code, signal) => {
+      clearTimeout(killTimer);
 
-        // If we killed it due to time, report timeout
-        if (killedByTimeout) {
-          resolve({ status: 'timeout', detail: 'execution exceeded timeout' });
+      if (killedByTimeout) {
+        resolve({ status: 'timeout', detail: 'execution exceeded timeout' });
+        return;
+      }
+      if (killedByOutputCap) {
+        resolve({
+          status: 'crash',
+          detail: 'execution output exceeded safe size limit',
+        });
+        return;
+      }
+
+      const markerAt = stdout.lastIndexOf(resultToken);
+      const markedPayload =
+        markerAt >= 0 ? stdout.slice(markerAt + resultToken.length) : '';
+
+      if (markedPayload.length > MAX_RESULT_PAYLOAD_BYTES) {
+        resolve({
+          status: 'crash',
+          detail: 'harness output exceeded safe payload size',
+        });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(markedPayload) as {
+          ok?: boolean;
+          error?: string;
+          detail?: string;
+          results?: SandboxPerTest[];
+        };
+        if (
+          parsed &&
+          parsed.ok === true &&
+          Array.isArray(parsed.results) &&
+          parsed.results.every(
+            (result) =>
+              result &&
+              typeof result === 'object' &&
+              typeof result.index === 'number' &&
+              typeof result.ok === 'boolean' &&
+              Array.isArray(result.logs),
+          )
+        ) {
+          resolve({ status: 'ok', results: parsed.results });
           return;
         }
-
-        // Try to parse the harness JSON
-        try {
-          const parsed = JSON.parse(stdout) as {
-            ok?: boolean;
-            results?: SandboxPerTest[];
-          };
-          if (parsed && parsed.ok && Array.isArray(parsed.results)) {
-            resolve({ status: 'ok', results: parsed.results });
-            return;
-          }
-        } catch {
-          /* fall through */
+        if (parsed && parsed.ok === false) {
+          resolve({
+            status: 'crash',
+            detail: [parsed.error || 'harness_failure', parsed.detail]
+              .filter(Boolean)
+              .join(': '),
+          });
+          return;
         }
+      } catch {
+        /* fall through */
+      }
 
-        // Classify OOM vs generic crash/parse failure
-        const blob = (stderr || stdout || '').slice(0, 4000);
-        if (looksLikeOom(blob)) {
-          resolve({ status: 'oom', detail: blob });
-        } else {
-          resolve({ status: 'parse_error', detail: blob || 'non-JSON output' });
-        }
-      },
-    );
+      const blob = (stderr || markedPayload || stdout || '').slice(0, 4000);
+      if (looksLikeOom(blob)) {
+        resolve({ status: 'oom', detail: blob });
+      } else if (signal) {
+        resolve({ status: 'killed', detail: `terminated by signal ${signal}` });
+      } else {
+        resolve({ status: 'crash', detail: blob || 'invalid harness output' });
+      }
+    });
   });
 }
 
 function extractSyntaxErrorDetails(code: string, stack: string) {
-  const fname = 'submitted_code.js';
-  const START = 1;
+  const fname = SUBMITTED_FILENAME;
 
   function escapeRegex(s: string) {
-    return String(s).replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  function extractUserPosition(
-    stack: string,
-    filename: string,
-    startLineInEval: number,
-  ) {
-    if (!stack) return { line: undefined, column: undefined, stack: undefined };
-
+  function extractUserPosition(stack: string, filename: string) {
+    if (!stack) return { line: undefined, column: undefined };
     const s = String(stack);
 
-    // 1) Our virtual filename
-    const rxFile = new RegExp(escapeRegex(filename) + ':(\\d+):(\\d+)');
+    const rxFile = new RegExp(escapeRegex(filename) + ':(\\d+)(?::(\\d+))?');
     let m = s.match(rxFile);
+    if (m) {
+      const rawLine = Number(m[1]) || undefined;
+      const line =
+        typeof rawLine === 'number'
+          ? Math.max(1, rawLine - USER_FN_BODY_PREFIX_LINES - 1)
+          : rawLine;
+      let column = m[2] ? Number(m[2]) || undefined : undefined;
+      if (!column) {
+        const caretMatch = s.match(/\n([ \t]*)\^/);
+        const spaces = caretMatch?.[1];
+        if (typeof spaces === 'string') {
+          column = spaces.length + 1;
+        }
+      }
+      return {
+        line,
+        column,
+      };
+    }
+
+    m = s.match(/<anonymous>:(\d+):(\d+)/);
     if (m) {
       return {
         line: Number(m[1]) || undefined,
         column: Number(m[2]) || undefined,
-        stack: s,
       };
     }
 
-    // 2) Deno's eval wrapper ($deno$eval.mts)
-    m = s.match(/\$deno\$eval\.mts:(\d+):(\d+)/);
-    if (m) {
-      const evalLine = Number(m[1]);
-      const col = Number(m[2]) || undefined;
-      if (Number.isFinite(evalLine) && Number.isFinite(startLineInEval)) {
-        const userLine = Math.max(1, evalLine - startLineInEval + 1);
-        return { line: userLine, column: col, stack: s };
-      }
-      return { line: undefined, column: col, stack: s };
-    }
-
-    // 3) Generic fallback
     m = s.match(/:(\d+):(\d+)/);
     return {
       line: m ? Number(m[1]) : undefined,
       column: m ? Number(m[2]) : undefined,
-      stack: s,
     };
   }
 
-  const pos = extractUserPosition(stack, fname, START);
-  const errorLine = pos.line;
+  const pos = extractUserPosition(stack, fname);
+  const lines = code.split(/\r?\n/);
+  const mappedLine =
+    typeof pos.line === 'number'
+      ? Math.min(Math.max(1, pos.line), Math.max(1, lines.length))
+      : undefined;
+  const errorLine = mappedLine;
   const errorColumn = pos.column;
 
-  const lines = code.split(/\r?\n/);
   const bad =
     typeof errorLine === 'number' && errorLine >= 1 && errorLine <= lines.length
       ? lines[errorLine - 1]
@@ -611,8 +769,8 @@ function extractSyntaxErrorDetails(code: string, stack: string) {
 
   const codeFrame =
     typeof errorLine === 'number'
-      ? `> ${errorLine} | ${bad}    ${caret}`
-      : `> ? | ${bad}    ${caret}`;
+      ? `> ${errorLine} | ${bad}${caret}`
+      : `> ? | ${bad}${caret}`;
 
   return {
     ok: false,
